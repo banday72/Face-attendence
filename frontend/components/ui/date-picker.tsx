@@ -46,7 +46,7 @@ export function DatePicker({
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
           className={cn(
-            "flex h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm shadow-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-50",
+            "flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-50",
             error && "border-destructive",
           )}
         />

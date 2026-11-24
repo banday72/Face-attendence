@@ -49,7 +49,7 @@ export default function StudentClassesPage() {
         skeleton={
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((item) => (
-              <Skeleton key={item} className="h-56 rounded-2xl" />
+              <Skeleton key={item} className="h-56 rounded-lg" />
             ))}
           </div>
         }
@@ -67,10 +67,10 @@ export default function StudentClassesPage() {
               );
               const rate = progress?.percentage ?? 0;
               return (
-                <Card key={item.id} className="flex flex-col hover:shadow-glow">
+                <Card key={item.id} className="flex flex-col hover:shadow-md">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <span className="flex size-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                      <span className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <BookOpen className="size-5" />
                       </span>
                       <Badge variant={rate >= 75 ? "success" : "warning"}>{percent(rate)}</Badge>
@@ -101,7 +101,7 @@ export default function StudentClassesPage() {
                       </div>
                       <Progress
                         value={rate}
-                        indicatorClassName={rate < 75 ? "bg-gradient-to-r from-amber-500 to-rose-500" : undefined}
+                        indicatorClassName={rate < 75 ? "bg-destructive" : undefined}
                       />
                       <p className="pt-1 text-[11px] text-muted-foreground">
                         {progress

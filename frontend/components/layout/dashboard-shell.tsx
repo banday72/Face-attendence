@@ -25,7 +25,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-background surface-gradient">
+    <div className="min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] border-r border-sidebar-border lg:block">
         <Sidebar role={user.role} pathname={pathname} />
       </aside>
@@ -35,10 +35,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             aria-label="Close navigation"
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/50"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 w-[280px] max-w-[85vw] shadow-2xl animate-fade-in">
+          <div className="absolute inset-y-0 left-0 w-[280px] max-w-[85vw] shadow-soft animate-fade-in">
             <Button
               variant="ghost"
               size="icon-sm"

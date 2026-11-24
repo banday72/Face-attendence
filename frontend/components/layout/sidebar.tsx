@@ -21,9 +21,9 @@ interface SidebarProps {
 }
 
 const roleStyles: Record<Role, string> = {
-  admin: "bg-amber-400/15 text-amber-300 ring-amber-300/25",
-  professor: "bg-sky-400/15 text-sky-300 ring-sky-300/25",
-  student: "bg-violet-400/15 text-violet-300 ring-violet-300/25",
+  admin: "bg-amber-500/15 text-amber-200 ring-amber-400/20",
+  professor: "bg-blue-500/15 text-blue-200 ring-blue-400/20",
+  student: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/20",
 };
 
 const roleIcons: Record<Role, LucideIcon> = {
@@ -39,9 +39,8 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex h-[72px] shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
-        <div className="relative flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-sky-400 shadow-lg shadow-indigo-950/40">
-          <GraduationCap className="size-5 text-white" />
-          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-emerald-400 ring-2 ring-sidebar" />
+        <div className="flex size-10 items-center justify-center rounded-md bg-sidebar-accent text-white">
+          <GraduationCap className="size-5" />
         </div>
         <div>
           <p className="text-[17px] font-bold leading-tight tracking-tight">Attendly</p>
@@ -55,7 +54,7 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
         <Link
           href={homeForRole(role)}
           onClick={onNavigate}
-          className="flex items-center gap-3 rounded-xl border border-sidebar-border bg-white/5 px-3 py-2.5 transition-colors hover:bg-white/10"
+          className="flex items-center gap-3 rounded-md border border-sidebar-border bg-sidebar-accent/10 px-3 py-2.5 transition-colors hover:bg-sidebar-accent/15"
         >
           <div className={cn("flex size-8 items-center justify-center rounded-lg ring-1", roleStyles[role])}>
             <RoleIcon className="size-4" />
@@ -87,21 +86,21 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                      "group relative flex items-center gap-3 rounded-md border-l-2 px-3 py-2.5 text-sm font-medium transition-colors",
                       active
-                        ? "bg-sidebar-accent/15 text-white shadow-[inset_2px_0_0_hsl(var(--sidebar-accent))]"
-                        : "text-sidebar-muted hover:bg-white/5 hover:text-white",
+                        ? "border-sidebar-accent bg-sidebar-accent/15 text-white"
+                        : "border-transparent text-sidebar-muted hover:bg-sidebar-accent/10 hover:text-white",
                     )}
                   >
                     <Icon
                       className={cn(
                         "size-[18px] shrink-0 transition-colors",
-                        active ? "text-indigo-300" : "text-sidebar-muted group-hover:text-white",
+                        active ? "text-sidebar-accent" : "text-sidebar-muted group-hover:text-white",
                       )}
                     />
                     <span className="truncate">{item.label}</span>
                     {active ? (
-                      <span className="ml-auto size-1.5 rounded-full bg-indigo-300" />
+                      <span className="ml-auto size-1.5 rounded-full bg-sidebar-accent" />
                     ) : null}
                   </Link>
                 );
@@ -112,15 +111,15 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="shrink-0 border-t border-sidebar-border p-4">
-        <div className="rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] p-4">
+        <div className="rounded-md border border-sidebar-border bg-sidebar-accent/5 p-4">
           <div className="flex items-center gap-2">
-            <LifeBuoy className="size-4 text-indigo-300" />
+            <LifeBuoy className="size-4 text-sidebar-accent" />
             <p className="text-xs font-semibold">Need a hand?</p>
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-sidebar-muted">
             Ask your department coordinator for access or attendance corrections.
           </p>
-          <Badge className="mt-3 border-white/10 bg-white/5 text-[10px] text-sidebar-muted" variant="outline">
+          <Badge className="mt-3 border-sidebar-border bg-sidebar-accent/10 text-[10px] text-sidebar-muted" variant="outline">
             Secure session active
           </Badge>
         </div>

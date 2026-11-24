@@ -165,7 +165,7 @@ export default function FaceRegisterPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-slate-950">
+            <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-slate-950">
               <video ref={videoRef} className="size-full object-cover" playsInline muted />
               {cameraState !== "active" ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-white/70">
@@ -186,7 +186,7 @@ export default function FaceRegisterPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Current challenge</p>
@@ -225,7 +225,7 @@ export default function FaceRegisterPage() {
                     <img
                       src={frame.data}
                       alt={`Frame ${index + 1}`}
-                      className="size-20 rounded-xl border border-border object-cover"
+                      className="size-20 rounded-md border border-border object-cover"
                     />
                     <span className="absolute left-1 top-1 flex size-5 items-center justify-center rounded-full bg-emerald-500 text-white">
                       <Check className="size-3" />
@@ -299,7 +299,7 @@ export default function FaceRegisterPage() {
               <CardDescription>Required version {CONSENT_VERSION}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
+              <div className="flex items-start gap-3 rounded-md border border-border bg-muted/30 p-4">
                 <Checkbox
                   id="face-consent"
                   checked={consent}
@@ -328,14 +328,14 @@ export default function FaceRegisterPage() {
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-sky-400 transition-all"
+                    className="h-full rounded-full bg-primary transition-all"
                     style={{ width: `${Math.min(100, (frames.length / FACE_FRAME_COUNT) * 100)}%` }}
                   />
                 </div>
               </div>
 
               {formError ? (
-                <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+                <div className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                   <CircleAlert className="mt-0.5 size-4 shrink-0" /> {formError}
                 </div>
               ) : null}

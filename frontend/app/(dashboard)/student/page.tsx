@@ -70,7 +70,7 @@ export default function StudentDashboardPage() {
         skeleton={
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3].map((item) => (
-              <Skeleton key={item} className="h-32 rounded-2xl" />
+              <Skeleton key={item} className="h-32 rounded-lg" />
             ))}
           </div>
         }
@@ -110,7 +110,7 @@ export default function StudentDashboardPage() {
             </div>
 
             {data.warnings.length ? (
-              <div className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+              <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
                 {data.warnings.map((warning, index) => (
                   <p key={index} className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {warning}
@@ -159,7 +159,7 @@ export default function StudentDashboardPage() {
                         <Progress
                           value={course.percentage}
                           indicatorClassName={
-                            course.percentage < 75 ? "bg-gradient-to-r from-amber-500 to-rose-500" : undefined
+                            course.percentage < 75 ? "bg-destructive" : undefined
                           }
                         />
                       </div>
@@ -184,7 +184,7 @@ export default function StudentDashboardPage() {
                     data.today_classes.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center gap-3 rounded-xl border border-border p-3"
+                        className="flex items-center gap-3 rounded-md border border-border p-3"
                       >
                         <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                           <GraduationCap className="size-5" />

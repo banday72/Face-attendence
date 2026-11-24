@@ -52,7 +52,7 @@ export default function StudentSchedulePage() {
         error={resource.error}
         data={resource.data}
         onRetry={resource.reload}
-        skeleton={<Skeleton className="h-96 rounded-2xl" />}
+        skeleton={<Skeleton className="h-96 rounded-lg" />}
         emptyTitle="No timetable available"
         emptyDescription="Your classes have not published meeting days yet. Check back after registration."
       >
@@ -95,7 +95,7 @@ export default function StudentSchedulePage() {
                       dayItems.map((item) => (
                         <Card key={item.id} className="overflow-hidden">
                           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-                            <div className="flex w-full shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10 px-4 py-3 text-primary sm:w-32">
+                            <div className="flex w-full shrink-0 flex-col items-center justify-center rounded-md bg-primary/10 px-4 py-3 text-primary sm:w-32">
                               <p className="text-xs font-semibold uppercase tracking-wider">{dayNames[day]}</p>
                               <p className="mt-1 text-sm font-bold">{formatTime(item.start_time)}</p>
                             </div>

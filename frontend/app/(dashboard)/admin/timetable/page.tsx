@@ -423,7 +423,7 @@ export default function AdminTimetablePage() {
               </FormField>
             </div>
             {formError ? (
-              <p className="sm:col-span-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
               </p>
             ) : null}

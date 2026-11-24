@@ -63,7 +63,7 @@ export function Topbar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 flex h-[72px] items-center gap-3 border-b border-border/80 bg-background/85 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-30 flex h-[72px] items-center gap-3 border-b border-border bg-card px-4 sm:px-6">
       <Button
         variant="ghost"
         size="icon"
@@ -103,10 +103,10 @@ export function Topbar({
           onFocus={() => setSearchOpen(true)}
           placeholder="Search pages…"
           aria-label="Search pages"
-          className="h-9 w-full rounded-xl border border-border/80 bg-muted/50 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-background focus:ring-2 focus:ring-ring/20"
+          className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-ring/30"
         />
         {searchOpen && search.trim() ? (
-          <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-2xl">
+          <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-md border border-border bg-popover p-1.5 shadow-soft">
             {results.length ? (
               results.map((item) => {
                 const Icon = item.icon;
@@ -163,10 +163,10 @@ export function Topbar({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-2 rounded-xl p-1 pr-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex items-center gap-2 rounded-md p-1 pr-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             aria-label="Account menu"
           >
-            <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-400 text-xs font-bold text-white">
+            <span className="flex size-9 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
               {initials(user.full_name || user.email)}
             </span>
             <span className="hidden text-left sm:block">
@@ -188,7 +188,7 @@ export function Topbar({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <div className="px-2.5 py-2">
-            <Badge variant="purple" className="capitalize">
+            <Badge variant="secondary" className="capitalize">
               {roleLabel(user.role)} account
             </Badge>
           </div>

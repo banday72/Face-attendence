@@ -273,7 +273,7 @@ export default function DepartmentsPage() {
               />
             </FormField>
             {formError ? (
-              <p className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <p className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
               </p>
             ) : null}

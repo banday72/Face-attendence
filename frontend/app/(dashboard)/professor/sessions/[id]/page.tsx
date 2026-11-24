@@ -257,7 +257,7 @@ export default function SessionMonitorPage() {
               <Card className="p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Enrolled</p>
-                  <Users className="size-5 text-indigo-500" />
+                  <Users className="size-5 text-primary" />
                 </div>
                 <p className="mt-3 text-3xl font-bold">{data.session.total_students || data.roster.total}</p>
               </Card>
@@ -278,7 +278,7 @@ export default function SessionMonitorPage() {
                         : "Manual rotation enabled."}
                   </p>
                   {data.session.status === "active" && !qr?.qr_payload ? (
-                    <div className="w-full space-y-2 rounded-xl border border-dashed border-border bg-muted/30 p-3 text-center">
+                    <div className="w-full space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3 text-center">
                       <p className="text-xs text-muted-foreground">
                         No QR token is available yet. Refresh to display one for students.
                       </p>
@@ -292,7 +292,7 @@ export default function SessionMonitorPage() {
                       </Button>
                     </div>
                   ) : null}
-                  <div className="w-full space-y-2 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+                  <div className="w-full space-y-2 rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
                     <div className="flex justify-between">
                       <span>Status</span>
                       <SessionStatusBadge status={data.session.status} />

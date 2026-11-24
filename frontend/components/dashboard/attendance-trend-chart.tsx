@@ -46,8 +46,8 @@ export function AttendanceTrendChart({
               <AreaChart data={data} margin={{ top: 10, right: 8, left: -22, bottom: 0 }}>
                 <defs>
                   <linearGradient id="attendanceFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#1d4ed8" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#94a3b830" />
@@ -67,7 +67,7 @@ export function AttendanceTrendChart({
                   domain={[0, "auto"]}
                 />
                 <Tooltip
-                  cursor={{ stroke: "#6366f155", strokeWidth: 1 }}
+                  cursor={{ stroke: "#1d4ed855", strokeWidth: 1 }}
                   contentStyle={{
                     borderRadius: 12,
                     border: "1px solid hsl(var(--border))",
@@ -80,10 +80,10 @@ export function AttendanceTrendChart({
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#6366f1"
+                  stroke="#1d4ed8"
                   strokeWidth={2.5}
                   fill="url(#attendanceFill)"
-                  activeDot={{ r: 5, fill: "#6366f1", stroke: "#fff", strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: "#1d4ed8", stroke: "#fff", strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>

@@ -167,7 +167,7 @@ export default function ProfessorStudentsPage() {
                       <TableRow key={row.student_id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-sky-400 text-xs font-bold text-white">
+                            <span className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
                               {initials(row.name)}
                             </span>
                             <div>

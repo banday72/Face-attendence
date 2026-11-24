@@ -97,38 +97,34 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
-      <div className="pointer-events-none absolute -left-40 -top-40 size-[500px] rounded-full bg-indigo-500/10 blur-[120px]" />
-      <div className="pointer-events-none absolute -bottom-48 -right-32 size-[520px] rounded-full bg-sky-500/10 blur-[130px]" />
-
-      <div className="relative w-full max-w-2xl">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <div className="w-full max-w-2xl">
         <div className="mb-6 flex items-center justify-between">
           <Link href="/login" className="flex items-center gap-2.5">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-400 text-white">
+            <span className="flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <GraduationCap className="size-5" />
             </span>
-            <span className="text-lg font-bold tracking-tight">Attendly</span>
+            <span className="text-lg font-semibold tracking-tight">Attendly</span>
           </Link>
           <Button variant="ghost" size="sm" asChild>
             <Link href="/login">Back to sign in</Link>
           </Button>
         </div>
 
-        <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
-          <div className="relative bg-gradient-to-r from-indigo-600 via-violet-600 to-sky-500 px-6 py-7 text-white sm:px-9">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,.22),transparent_45%)]" />
-            <div className="relative flex items-center gap-3">
-              <span className="flex size-11 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+          <div className="border-b border-border bg-muted/30 px-6 py-7 text-foreground sm:px-9">
+            <div className="flex items-center gap-3">
+              <span className="flex size-11 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <UserPlus className="size-5" />
               </span>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Student registration
                 </p>
-                <h1 className="text-2xl font-bold tracking-tight">Join your campus</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">Join your campus</h1>
               </div>
             </div>
-            <p className="relative mt-3 text-sm text-white/75">
+            <p className="mt-3 text-sm text-muted-foreground">
               Create your student account to access classes, check-ins, and attendance history.
             </p>
           </div>
@@ -208,7 +204,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
+            <div className="flex items-start gap-3 rounded-md border border-border bg-muted/30 p-4">
               <Checkbox
                 id="consent"
                 checked={consent}
@@ -229,7 +225,7 @@ export default function RegisterPage() {
             </div>
 
             {serverError ? (
-              <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <div className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {serverError}
               </div>
             ) : null}

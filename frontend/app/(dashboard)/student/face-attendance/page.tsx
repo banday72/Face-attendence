@@ -205,7 +205,7 @@ export default function FaceAttendancePage() {
       />
 
       {faceStatus.data && !faceStatus.data.registered ? (
-        <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <CircleAlert className="mt-0.5 size-5 shrink-0 text-amber-500" />
             <div>
@@ -232,7 +232,7 @@ export default function FaceAttendancePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-slate-950">
+            <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-slate-950">
               <video ref={videoRef} className="size-full object-cover" playsInline muted />
               {cameraState !== "active" ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-white/70">
@@ -253,7 +253,7 @@ export default function FaceAttendancePage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
               <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Session challenge</p>
               <p className="mt-1 text-sm font-semibold">{challengeLabel}</p>
             </div>
@@ -283,14 +283,14 @@ export default function FaceAttendancePage() {
             </div>
 
             {formError ? (
-              <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <div className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" /> {formError}
               </div>
             ) : null}
 
             {selected?.require_location ? (
               <div
-                className={`flex items-start gap-2 rounded-xl border p-3 text-xs ${
+                className={`flex items-start gap-2 rounded-md border p-3 text-xs ${
                   location?.status === "denied"
                     ? "border-destructive/30 bg-destructive/5 text-destructive"
                     : "border-border bg-muted/30 text-muted-foreground"
@@ -311,7 +311,7 @@ export default function FaceAttendancePage() {
 
             {result ? (
               <div
-                className={`flex items-start gap-3 rounded-xl border p-4 ${
+                className={`flex items-start gap-3 rounded-md border p-4 ${
                   result.status === "success"
                     ? "border-emerald-500/30 bg-emerald-500/5"
                     : "border-destructive/30 bg-destructive/5"
@@ -355,7 +355,7 @@ export default function FaceAttendancePage() {
               ) : sessions.error ? (
                 <p className="text-sm text-destructive">{errorMessage(sessions.error)}</p>
               ) : activeSessions.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border p-6 text-center">
+                <div className="rounded-md border border-dashed border-border p-6 text-center">
                   <p className="text-sm font-medium">No active sessions</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Face check-in opens when your professor starts a session.
@@ -379,7 +379,7 @@ export default function FaceAttendancePage() {
                     </SelectContent>
                   </Select>
                   {selected ? (
-                    <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground">
+                    <div className="space-y-2 rounded-md border border-border bg-muted/30 p-4 text-xs text-muted-foreground">
                       <p className="flex justify-between">
                         <span>Classroom</span>
                         <span>{selected.classroom_name || "—"}</span>
@@ -415,7 +415,7 @@ export default function FaceAttendancePage() {
             <CardContent className="space-y-2 text-xs text-muted-foreground">
               <p>Frames are used only for this verification request and discarded after submission.</p>
               <p>Active challenges help confirm that a real person is present.</p>
-              <p className="mt-3 rounded-xl bg-muted/40 p-3">
+              <p className="mt-3 rounded-md bg-muted/40 p-3">
                 Camera unavailable? Ask your professor to mark you manually or use{" "}
                 <Link href="/student/scan" className="font-semibold text-primary hover:underline">
                   QR check-in

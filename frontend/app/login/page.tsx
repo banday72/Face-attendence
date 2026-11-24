@@ -9,7 +9,6 @@ import {
   GraduationCap,
   QrCode,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -89,38 +88,29 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-[#0d1024] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
-        <div className="pointer-events-none absolute inset-0 opacity-70">
-          <div className="absolute -left-24 -top-24 size-[420px] rounded-full bg-indigo-600/30 blur-[110px]" />
-          <div className="absolute bottom-0 right-0 size-[380px] rounded-full bg-sky-500/20 blur-[110px]" />
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.035)_1px,transparent_1px)] bg-[size:44px_44px]" />
-        </div>
-
-        <div className="relative flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-sky-400 shadow-glow">
+      <section className="relative hidden bg-[#0f172a] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-md bg-blue-500 text-white">
             <GraduationCap className="size-6" />
           </div>
           <div>
-            <p className="text-lg font-bold tracking-tight">Attendly</p>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">
-              University attendance OS
+            <p className="text-lg font-semibold tracking-tight">Attendly</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
+              University attendance system
             </p>
           </div>
         </div>
 
-        <div className="relative max-w-xl">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-indigo-200 backdrop-blur">
-            <Sparkles className="size-3.5" /> Built for modern campuses
-          </span>
-          <h1 className="mt-7 text-5xl font-bold leading-[1.08] tracking-tight xl:text-6xl">
-            Attendance that
-            <span className="block bg-gradient-to-r from-indigo-300 via-violet-300 to-sky-300 bg-clip-text text-transparent">
-              just works.
-            </span>
+        <div className="max-w-xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
+            Smart campus operations
+          </p>
+          <h1 className="mt-6 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">
+            Attendance you can rely on.
           </h1>
           <p className="mt-6 max-w-lg text-base leading-relaxed text-white/65">
-            One secure workspace for administrators, professors, and students — with
-            live sessions, QR and face verification, and actionable analytics.
+            One secure workspace for administrators, professors, and students, with
+            QR and face verification, live sessions, and clear reporting.
           </p>
 
           <div className="mt-10 space-y-3">
@@ -129,9 +119,9 @@ export default function LoginPage() {
               return (
                 <div
                   key={feature.title}
-                  className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm transition-colors hover:bg-white/[0.07]"
+                  className="flex items-start gap-4 rounded-md border border-white/10 bg-white/[0.03] p-4"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-indigo-200">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-white/10 text-blue-200">
                     <Icon className="size-5" />
                   </span>
                   <div>
@@ -146,26 +136,25 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="relative flex items-center gap-2 text-xs text-white/40">
+        <div className="flex items-center gap-2 text-xs text-white/40">
           <CheckCircle2 className="size-4 text-emerald-400" />
           Privacy-conscious · Role-based access · Audit ready
         </div>
       </section>
 
-      <section className="relative flex items-center justify-center bg-background px-5 py-10 sm:px-10">
-        <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-primary/[0.07] to-transparent" />
-        <div className="relative w-full max-w-[420px]">
+      <section className="flex items-center justify-center bg-background px-5 py-10 sm:px-10">
+        <div className="w-full max-w-[420px]">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-400 text-white">
+            <div className="flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <GraduationCap className="size-5" />
             </div>
-            <span className="text-lg font-bold">Attendly</span>
+            <span className="text-lg font-semibold">Attendly</span>
           </div>
 
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Welcome back
           </p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight">Sign in to your portal</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">Sign in to your portal</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Use your university credentials to continue.
           </p>
@@ -218,7 +207,7 @@ export default function LoginPage() {
             </div>
 
             {error ? (
-              <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <div className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {error}
               </div>
             ) : null}
@@ -236,7 +225,7 @@ export default function LoginPage() {
           </p>
 
           {process.env.NODE_ENV !== "production" ? (
-            <div className="mt-8 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+            <div className="mt-8 rounded-md border border-border bg-muted/30 p-4">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="size-4 text-amber-500" />
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">

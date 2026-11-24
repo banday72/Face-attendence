@@ -448,7 +448,7 @@ function SessionsContent() {
                 }
               />
             </FormField>
-            <div className="flex items-center justify-between rounded-xl border border-border p-3">
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
               <div>
                 <p className="text-sm font-medium">Require location</p>
                 <p className="text-xs text-muted-foreground">Check GPS distance from the classroom.</p>
@@ -461,7 +461,7 @@ function SessionsContent() {
                 aria-label="Require location"
               />
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-border p-3">
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
               <div>
                 <p className="text-sm font-medium">Enable face check-in</p>
                 <p className="text-xs text-muted-foreground">Allow liveness-verified check-ins.</p>
@@ -505,7 +505,7 @@ function SessionsContent() {
               </FormField>
             ) : null}
             {formError ? (
-              <p className="sm:col-span-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
               </p>
             ) : null}

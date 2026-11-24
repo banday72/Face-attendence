@@ -185,7 +185,7 @@ export default function StudentScanPage() {
             <CardDescription>Scanning stops automatically after a code is detected.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-slate-950">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-border bg-slate-950">
               <video ref={videoRef} className="size-full object-cover" playsInline muted />
               <canvas ref={canvasRef} className="hidden" />
               {cameraState !== "active" ? (
@@ -203,11 +203,11 @@ export default function StudentScanPage() {
                   </p>
                 </div>
               ) : (
-                <div className="pointer-events-none absolute inset-x-8 inset-y-12 rounded-2xl border-2 border-white/60 shadow-[0_0_0_9999px_rgba(2,6,23,.28)]">
-                  <span className="absolute -left-0.5 -top-0.5 size-6 rounded-tl-2xl border-l-4 border-t-4 border-indigo-400" />
-                  <span className="absolute -right-0.5 -top-0.5 size-6 rounded-tr-2xl border-r-4 border-t-4 border-indigo-400" />
-                  <span className="absolute -bottom-0.5 -left-0.5 size-6 rounded-bl-2xl border-b-4 border-l-4 border-indigo-400" />
-                  <span className="absolute -bottom-0.5 -right-0.5 size-6 rounded-br-2xl border-b-4 border-r-4 border-indigo-400" />
+                <div className="pointer-events-none absolute inset-x-8 inset-y-12 rounded-lg border-2 border-white/60 shadow-[0_0_0_9999px_rgba(2,6,23,.28)]">
+                  <span className="absolute -left-0.5 -top-0.5 size-6 rounded-tl-md border-l-4 border-t-4 border-primary" />
+                  <span className="absolute -right-0.5 -top-0.5 size-6 rounded-tr-md border-r-4 border-t-4 border-primary" />
+                  <span className="absolute -bottom-0.5 -left-0.5 size-6 rounded-bl-md border-b-4 border-l-4 border-primary" />
+                  <span className="absolute -bottom-0.5 -right-0.5 size-6 rounded-br-md border-b-4 border-r-4 border-primary" />
                 </div>
               )}
             </div>
@@ -230,7 +230,7 @@ export default function StudentScanPage() {
               </Button>
             </div>
 
-            <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs">
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Location signal</span>
                 <Badge
@@ -256,7 +256,7 @@ export default function StudentScanPage() {
                 </p>
               )}
               {location && location.status !== "verified" ? (
-                <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/5 p-2.5 text-destructive">
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/5 p-2.5 text-destructive">
                   <CircleAlert className="mt-0.5 size-4 shrink-0" />
                   <span>
                     Location could not be captured. Check-in will continue without it; if your
@@ -269,7 +269,7 @@ export default function StudentScanPage() {
                   type="checkbox"
                   checked={includeLocation}
                   onChange={(event) => setIncludeLocation(event.target.checked)}
-                  className="size-3.5 accent-indigo-600"
+                  className="size-3.5 accent-primary"
                 />
                 Include location with check-in
               </label>
@@ -307,7 +307,7 @@ export default function StudentScanPage() {
                 </Button>
               </form>
               {formError ? (
-                <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" /> {formError}
                 </div>
               ) : null}
@@ -352,7 +352,7 @@ export default function StudentScanPage() {
               <p className="flex gap-2">
                 <span className="font-bold text-primary">3.</span> If required, your location is checked against the classroom radius.
               </p>
-              <p className="mt-3 flex items-start gap-2 rounded-xl bg-muted/40 p-3 text-xs">
+              <p className="mt-3 flex items-start gap-2 rounded-md bg-muted/40 p-3 text-xs">
                 <CircleAlert className="mt-0.5 size-4 shrink-0" />
                 Camera access requires HTTPS (localhost is allowed). You can always use the manual token instead.
               </p>

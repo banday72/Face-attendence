@@ -60,7 +60,7 @@ export function AttendanceBarChart({
                 />
                 <YAxis tickLine={false} axisLine={false} fontSize={11} tick={{ fill: "#94a3b8" }} />
                 <Tooltip
-                  cursor={{ fill: "#6366f10d" }}
+                  cursor={{ fill: "#1d4ed80d" }}
                   contentStyle={{
                     borderRadius: 12,
                     border: "1px solid hsl(var(--border))",
@@ -70,7 +70,7 @@ export function AttendanceBarChart({
                   }}
                   formatter={(value: number | string) => [`${value}${suffix}`, "Value"]}
                 />
-                <Bar dataKey="value" fill="#38bdf8" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="value" fill="#1d4ed8" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

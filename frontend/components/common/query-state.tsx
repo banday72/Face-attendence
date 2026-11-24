@@ -32,7 +32,7 @@ export function QueryState<T>({
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-destructive/25 bg-destructive/5 p-6 text-center">
+      <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-6 text-center">
         <AlertCircle className="mx-auto size-6 text-destructive" />
         <p className="mt-3 font-semibold">Could not load data</p>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">

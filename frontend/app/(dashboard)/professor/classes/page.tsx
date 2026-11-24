@@ -58,7 +58,7 @@ export default function ProfessorClassesPage() {
         skeleton={
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((item) => (
-              <Skeleton key={item} className="h-52 rounded-2xl" />
+              <Skeleton key={item} className="h-52 rounded-lg" />
             ))}
           </div>
         }
@@ -67,16 +67,16 @@ export default function ProfessorClassesPage() {
       >
         {() =>
           classes.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               No classes match “{search}”.
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {classes.map((item) => (
-                <Card key={item.id} className="group flex flex-col hover:-translate-y-0.5 hover:shadow-glow">
+                <Card key={item.id} className="flex flex-col hover:shadow-md">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-3">
-                      <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/15 to-sky-500/10 text-indigo-600 dark:text-indigo-400">
+                      <span className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <GraduationCap className="size-5" />
                       </span>
                       <Badge variant="secondary" className="text-[10px]">

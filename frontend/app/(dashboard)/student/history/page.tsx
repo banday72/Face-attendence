@@ -79,7 +79,7 @@ export default function StudentHistoryPage() {
         error={resource.error}
         data={resource.data}
         onRetry={resource.reload}
-        skeleton={<div className="h-96 animate-pulse rounded-2xl bg-muted/60" />}
+        skeleton={<div className="h-96 animate-pulse rounded-lg bg-muted/60" />}
         emptyTitle="No attendance data"
       >
         {(data) => (

@@ -217,7 +217,7 @@ export default function CoursesPage() {
                       <TableRow key={course.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                            <span className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
                               <BookOpen className="size-4" />
                             </span>
                             <span className="font-medium">{course.name}</span>
@@ -314,7 +314,7 @@ export default function CoursesPage() {
               />
             </FormField>
             {formError ? (
-              <p className="sm:col-span-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
               </p>
             ) : null}

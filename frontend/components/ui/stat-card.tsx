@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 type Tone = "primary" | "success" | "warning" | "purple" | "sky" | "rose";
 
 const tones: Record<Tone, string> = {
-  primary: "from-indigo-500/18 to-violet-500/8 text-indigo-600 dark:text-indigo-400",
-  success: "from-emerald-500/18 to-teal-500/8 text-emerald-600 dark:text-emerald-400",
-  warning: "from-amber-500/20 to-orange-500/8 text-amber-600 dark:text-amber-400",
-  purple: "from-violet-500/18 to-fuchsia-500/8 text-violet-600 dark:text-violet-400",
-  sky: "from-sky-500/18 to-cyan-500/8 text-sky-600 dark:text-sky-400",
-  rose: "from-rose-500/18 to-pink-500/8 text-rose-600 dark:text-rose-400",
+  primary: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+  success: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  warning: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  purple: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+  sky: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300",
+  rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
 };
 
 interface StatCardProps {
@@ -47,7 +47,7 @@ export function StatCard({
   }
 
   return (
-    <Card className={cn("group relative overflow-hidden p-5 hover:-translate-y-0.5 hover:shadow-glow", className)}>
+    <Card className={cn("p-5", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -57,7 +57,7 @@ export function StatCard({
         </div>
         <div
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br",
+            "flex size-10 shrink-0 items-center justify-center rounded-md",
             tones[tone],
           )}
         >

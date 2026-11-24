@@ -41,7 +41,7 @@ export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: nu
   if (!payload) {
     return (
       <div
-        className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-muted/30 text-muted-foreground"
+        className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 text-muted-foreground"
         style={{ width: size, height: size }}
       >
         <QrCode className="size-8" />
@@ -53,7 +53,7 @@ export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: nu
   if (failed) {
     return (
       <div
-        className="flex items-center justify-center rounded-2xl border border-border bg-muted/30 p-4 text-center text-xs text-muted-foreground"
+        className="flex items-center justify-center rounded-lg border border-border bg-muted/30 p-4 text-center text-xs text-muted-foreground"
         style={{ width: size, height: size }}
       >
         QR preview unavailable. Token: {displayToken(payload)}
@@ -62,7 +62,7 @@ export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: nu
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-white p-3 shadow-soft" style={{ width: size + 24 }}>
+    <div className="rounded-lg border border-border bg-white p-3 shadow-soft" style={{ width: size + 24 }}>
       {image ? (
         <img src={image} alt="Session QR code" width={size} height={size} className="rounded-lg" />
       ) : (

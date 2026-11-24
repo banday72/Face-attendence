@@ -36,9 +36,9 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Admin overview"
-        title="Good to see you"
-        description="A live view of attendance, people, and academic activity across your university."
+        eyebrow="Administration"
+        title="Institution overview"
+        description="Attendance activity and academic records across your university."
         actions={
           <Button variant="outline" onClick={dashboard.reload}>
             <RefreshCw /> Refresh
@@ -54,7 +54,7 @@ export default function AdminDashboardPage() {
         skeleton={
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3, 4, 5, 6, 7].map((item) => (
-              <Skeleton key={item} className="h-36 rounded-2xl" />
+              <Skeleton key={item} className="h-36 rounded-lg" />
             ))}
           </div>
         }

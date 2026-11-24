@@ -44,9 +44,9 @@ export default function ProfessorDashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Teaching overview"
-        title="Your classroom, in focus"
-        description="Live attendance signals from the classes and sessions you teach."
+        eyebrow="Teaching"
+        title="Class overview"
+        description="Attendance signals from the classes and sessions you teach."
         actions={
           <>
             <Button variant="outline" asChild>
@@ -67,7 +67,7 @@ export default function ProfessorDashboardPage() {
         skeleton={
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {[0, 1, 2, 3, 4].map((item) => (
-              <div key={item} className="h-32 animate-pulse rounded-2xl bg-muted/60" />
+              <div key={item} className="h-32 animate-pulse rounded-lg bg-muted/60" />
             ))}
           </div>
         }

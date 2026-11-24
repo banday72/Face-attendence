@@ -266,7 +266,7 @@ export default function UsersPage() {
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-sky-400 text-xs font-bold text-white">
+                            <span className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
                               {initials(user.full_name || user.email)}
                             </span>
                             <div>
@@ -390,7 +390,7 @@ export default function UsersPage() {
                 placeholder={editing ? "Leave blank to keep current" : "At least 8 characters"}
               />
             </FormField>
-            <div className="flex items-center justify-between rounded-xl border border-border p-3 sm:col-span-2">
+            <div className="flex items-center justify-between rounded-md border border-border p-3 sm:col-span-2">
               <div>
                 <p className="text-sm font-medium">Active account</p>
                 <p className="text-xs text-muted-foreground">Inactive users cannot sign in.</p>
@@ -402,7 +402,7 @@ export default function UsersPage() {
               />
             </div>
             {formError ? (
-              <p className="sm:col-span-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
               </p>
             ) : null}

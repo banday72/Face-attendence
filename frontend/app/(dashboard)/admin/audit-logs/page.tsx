@@ -234,20 +234,20 @@ export default function AuditLogsPage() {
             </DialogDescription>
           </DialogHeader>
           {detail?.reason ? (
-            <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
               <span className="font-semibold">Reason: </span>{detail.reason}
             </div>
           ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Before</p>
-              <pre className="scrollbar-thin max-h-72 overflow-auto rounded-xl bg-muted/50 p-3 text-[11px] leading-relaxed">
+              <pre className="scrollbar-thin max-h-72 overflow-auto rounded-md bg-muted/50 p-3 text-[11px] leading-relaxed">
                 {JSON.stringify(detail?.before ?? {}, null, 2)}
               </pre>
             </div>
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">After</p>
-              <pre className="scrollbar-thin max-h-72 overflow-auto rounded-xl bg-muted/50 p-3 text-[11px] leading-relaxed">
+              <pre className="scrollbar-thin max-h-72 overflow-auto rounded-md bg-muted/50 p-3 text-[11px] leading-relaxed">
                 {JSON.stringify(detail?.after ?? {}, null, 2)}
               </pre>
             </div>

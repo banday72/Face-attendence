@@ -20,7 +20,7 @@ export function DashboardStatCard(props: DashboardStatCardProps) {
   const { href, className, ...statProps } = props;
   if (!href) return <StatCard {...statProps} className={className} />;
   return (
-    <Link href={href} className={cn("block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className)}>
+    <Link href={href} className={cn("block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className)}>
       <StatCard {...statProps} />
       <span className="sr-only">
         Open <ArrowUpRight />

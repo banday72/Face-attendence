@@ -312,7 +312,7 @@ export default function ClassesPage() {
                       <TableRow key={item.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                            <span className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
                               <GraduationCap className="size-4" />
                             </span>
                             <div>
@@ -449,7 +449,7 @@ export default function ClassesPage() {
               />
             </FormField>
             {formError ? (
-              <p className="sm:col-span-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
               </p>
             ) : null}
@@ -489,7 +489,7 @@ export default function ClassesPage() {
               <Plus /> Enroll
             </Button>
           </div>
-          <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-border">
+          <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border">
             {roster.loading ? (
               <div className="p-6 text-center text-sm text-muted-foreground">Loading roster…</div>
             ) : roster.error ? (

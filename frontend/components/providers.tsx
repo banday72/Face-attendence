@@ -20,7 +20,7 @@ export function Providers({ children }: { children: ReactNode }) {
             closeButton
             toastOptions={{
               className:
-                "rounded-xl border-border bg-card text-foreground shadow-2xl font-sans",
+                "rounded-md border-border bg-card text-foreground shadow-soft font-sans",
             }}
           />
         </AuthProvider>
