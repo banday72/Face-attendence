@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -30,13 +31,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
-
-  const loadProfile = useCallback(async (): Promise<User> => {
-    const payload = await api.get<unknown>("/auth/me");
-    return normalizeUser(payload);
-  }, []);
 
   const clearSession = useCallback(() => {
     setAccessToken(null);
@@ -46,26 +43,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    if (status === "authenticated") return;
+    if (pathname === "/login" || pathname === "/register") {
+      setStatus("unauthenticated");
+      return () => {
+        active = false;
+      };
+    }
     void (async () => {
-      const refreshed = await refreshAccessToken();
+      const refreshedUser = await refreshAccessToken();
       if (!active) return;
-      if (!refreshed) {
+      if (!refreshedUser) {
         setStatus("unauthenticated");
         return;
       }
-      try {
-        const profile = await loadProfile();
-        if (!active) return;
-        setUser(profile);
-        setStatus("authenticated");
-      } catch {
-        if (active) setStatus("unauthenticated");
-      }
+      setUser(refreshedUser);
+      setStatus("authenticated");
     })();
     return () => {
       active = false;
     };
-  }, [loadProfile]);
+  }, [pathname, status]);
 
   useEffect(() => {
     window.addEventListener("auth:unauthorized", clearSession);
@@ -81,22 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       const envelope = isRecord(payload) ? payload : {};
       const token = pick(envelope, ["access_token", "accessToken", "token"]);
-      if (!token) {
-        throw new Error("The server did not return an access token.");
+      if (!token || !isRecord(envelope.user)) {
+        throw new Error("The server did not return a complete session.");
       }
+      const profile = normalizeUser(envelope.user);
       setAccessToken(token);
-
-      let profile: User;
-      try {
-        profile = await loadProfile();
-      } catch {
-        throw new Error("Unable to load your profile.");
-      }
       setUser(profile);
       setStatus("authenticated");
       return profile;
     },
-    [loadProfile],
+    [],
   );
 
   const register = useCallback(async (payload: RegisterPayload) => {
@@ -104,31 +96,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      await api.post<unknown>("/auth/logout");
-    } catch {
-      clearSession();
-      return;
-    }
     clearSession();
+    void api
+      .post<unknown>("/auth/logout", undefined, { keepalive: true })
+      .catch(() => undefined);
   }, [clearSession]);
 
   const refresh = useCallback(async (): Promise<boolean> => {
-    const refreshed = await refreshAccessToken();
-    if (!refreshed) {
+    const refreshedUser = await refreshAccessToken();
+    if (!refreshedUser) {
       clearSession();
       return false;
     }
-    try {
-      const profile = await loadProfile();
-      setUser(profile);
-      setStatus("authenticated");
-      return true;
-    } catch {
-      clearSession();
-      return false;
-    }
-  }, [clearSession, loadProfile]);
+    setUser(refreshedUser);
+    setStatus("authenticated");
+    return true;
+  }, [clearSession]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

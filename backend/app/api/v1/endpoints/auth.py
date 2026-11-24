@@ -25,7 +25,15 @@ from app.core.security import (
     verify_password,
 )
 from app.models import Professor, RefreshToken, Student, User
-from app.schemas.auth import AccessTokenOut, LoginIn, MeOut, RegisterIn, Role, UserOut
+from app.schemas.auth import (
+    AccessTokenOut,
+    AuthOut,
+    LoginIn,
+    MeOut,
+    RegisterIn,
+    Role,
+    UserOut,
+)
 from app.utils.uuid import new_uuid, utcnow
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -52,6 +60,44 @@ def _access_token_out(user: User) -> AccessTokenOut:
     return AccessTokenOut(
         access_token=create_access_token(user.id, user.role),
         expires_in=settings.access_token_expire_minutes * 60,
+    )
+
+
+def _me_out(db: Session, user: User) -> MeOut:
+    student = db.scalar(select(Student).where(Student.user_id == user.id))
+    professor = db.scalar(select(Professor).where(Professor.user_id == user.id))
+    department_id = None
+    department_name = None
+    if student and student.department:
+        department_id = student.department_id
+        department_name = student.department.name
+    elif professor and professor.department:
+        department_id = professor.department_id
+        department_name = professor.department.name
+    return MeOut(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=cast(Role, user.role),
+        is_active=user.is_active,
+        phone=user.phone,
+        created_at=user.created_at,
+        university_id=student.university_id if student else None,
+        program=student.program if student else None,
+        year_level=student.year_level if student else None,
+        employee_id=professor.employee_id if professor else None,
+        department_id=department_id,
+        department_name=department_name,
+    )
+
+
+def _auth_out(db: Session, user: User) -> AuthOut:
+    access = _access_token_out(user)
+    return AuthOut(
+        access_token=access.access_token,
+        token_type=access.token_type,
+        expires_in=access.expires_in,
+        user=_me_out(db, user),
     )
 
 
@@ -117,24 +163,24 @@ def register(payload: RegisterIn, request: Request, response: Response, db: DB_D
     return user
 
 
-@router.post("/login", response_model=AccessTokenOut)
+@router.post("/login", response_model=AuthOut)
 @login_limit
-def login(payload: LoginIn, request: Request, response: Response, db: DB_Dependency) -> AccessTokenOut:
+def login(payload: LoginIn, request: Request, response: Response, db: DB_Dependency) -> AuthOut:
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise AppError(401, "unauthenticated", "Invalid email or password")
     if not user.is_active:
         raise AppError(403, "forbidden", "Account is disabled")
     refresh = _issue_refresh_token(db, user)
-    access = _access_token_out(user)
+    auth = _auth_out(db, user)
     db.commit()
     _set_refresh_cookie(response, refresh)
-    return access
+    return auth
 
 
-@router.post("/refresh", response_model=AccessTokenOut)
+@router.post("/refresh", response_model=AuthOut)
 @refresh_limit
-def refresh(request: Request, response: Response, db: DB_Dependency) -> AccessTokenOut:
+def refresh(request: Request, response: Response, db: DB_Dependency) -> AuthOut:
     token = request.cookies.get(REFRESH_COOKIE)
     if not token:
         raise AppError(401, "unauthenticated", "Refresh cookie is missing")
@@ -176,10 +222,10 @@ def refresh(request: Request, response: Response, db: DB_Dependency) -> AccessTo
         raise AppError(401, "unauthenticated", "Refresh token is invalid or expired")
 
     refresh_token = _issue_refresh_token(db, user)
-    access = _access_token_out(user)
+    auth = _auth_out(db, user)
     db.commit()
     _set_refresh_cookie(response, refresh_token)
-    return access
+    return auth
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -197,28 +243,4 @@ def logout(request: Request, response: Response, db: DB_Dependency) -> Response:
 
 @router.get("/me", response_model=MeOut)
 def me(db: DB_Dependency, user: User = Depends(get_current_user)) -> MeOut:
-    student = db.scalar(select(Student).where(Student.user_id == user.id))
-    professor = db.scalar(select(Professor).where(Professor.user_id == user.id))
-    department_id = None
-    department_name = None
-    if student and student.department:
-        department_id = student.department_id
-        department_name = student.department.name
-    elif professor and professor.department:
-        department_id = professor.department_id
-        department_name = professor.department.name
-    return MeOut(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=cast(Role, user.role),
-        is_active=user.is_active,
-        phone=user.phone,
-        created_at=user.created_at,
-        university_id=student.university_id if student else None,
-        program=student.program if student else None,
-        year_level=student.year_level if student else None,
-        employee_id=professor.employee_id if professor else None,
-        department_id=department_id,
-        department_name=department_name,
-    )
+    return _me_out(db, user)

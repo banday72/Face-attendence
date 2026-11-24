@@ -1,4 +1,5 @@
-import { isRecord, normalizePaginated, pick, str } from "@/lib/normalize";
+import { isRecord, normalizePaginated, normalizeUser, pick, str } from "@/lib/normalize";
+import type { User } from "@/lib/types";
 
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "");
 const isLocalApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(
@@ -26,6 +27,7 @@ export interface ApiRequestOptions {
   signal?: AbortSignal;
   headers?: Record<string, string>;
   skipAuth?: boolean;
+  keepalive?: boolean;
   responseType?: "json" | "blob";
 }
 
@@ -168,9 +170,9 @@ async function parseApiError(response: Response): Promise<ApiError> {
   });
 }
 
-let refreshPromise: Promise<boolean> | null = null;
+let refreshPromise: Promise<User | null> | null = null;
 
-export function refreshAccessToken(): Promise<boolean> {
+export function refreshAccessToken(): Promise<User | null> {
   if (refreshPromise) return refreshPromise;
 
   const attempt = (async () => {
@@ -180,18 +182,16 @@ export function refreshAccessToken(): Promise<boolean> {
         credentials: "include",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
       });
-      if (!response.ok) return false;
+      if (!response.ok) return null;
       const payload: unknown = await response.json().catch(() => undefined);
-      const token = pick(isRecord(payload) ? payload : {}, [
-        "access_token",
-        "accessToken",
-        "token",
-      ]);
-      if (!token) return false;
+      const envelope = isRecord(payload) ? payload : {};
+      const token = pick(envelope, ["access_token", "accessToken", "token"]);
+      const profile = envelope.user;
+      if (!token || !isRecord(profile)) return null;
       setAccessToken(token);
-      return true;
+      return normalizeUser(profile);
     } catch {
-      return false;
+      return null;
     }
   })();
 
@@ -225,6 +225,7 @@ export async function apiRequest<T>(
       method: options.method ?? "GET",
       headers,
       credentials: "include",
+      keepalive: options.keepalive,
       body:
         options.body === undefined
           ? undefined
@@ -243,8 +244,8 @@ export async function apiRequest<T>(
   }
 
   if (response.status === 401 && !options.skipAuth && retryOnUnauthorized) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) return apiRequest<T>(path, options, false);
+    const refreshedUser = await refreshAccessToken();
+    if (refreshedUser) return apiRequest<T>(path, options, false);
     signalUnauthorized();
   }
 

@@ -25,8 +25,8 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | POST | `/auth/register` | public | Student self-registration; university ID must be unique |
-| POST | `/auth/login` | public | Returns an access token and sets a rotating HttpOnly refresh cookie |
-| POST | `/auth/refresh` | refresh cookie | Rotates refresh token and returns a new access token |
+| POST | `/auth/login` | public | Returns an access token plus user profile and sets a rotating HttpOnly refresh cookie |
+| POST | `/auth/refresh` | refresh cookie | Rotates refresh token and returns a new access token plus user profile |
 | POST | `/auth/logout` | refresh cookie | Revokes refresh token |
 | GET | `/auth/me` | authenticated | Current user profile and role |
 

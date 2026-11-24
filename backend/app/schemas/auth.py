@@ -62,3 +62,7 @@ class MeOut(UserOut):
     employee_id: str | None = None
     department_id: str | None = None
     department_name: str | None = None
+
+
+class AuthOut(AccessTokenOut):
+    user: MeOut
