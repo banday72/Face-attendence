@@ -149,4 +149,17 @@ OpenAPI is generated from FastAPI and is the machine-readable source of truth. T
 
 Compose uses a multi-stage Next.js standalone image and a non-root FastAPI container. Put both services behind a TLS-terminating reverse proxy in production, expose only the proxy publicly, persist PostgreSQL and face-model volumes, and configure backups for the database. Set `NEXT_PUBLIC_API_URL` at frontend build time because Next.js inlines public environment variables during compilation.
 
+### Vercel monorepo deployment
+
+The root `vercel.json` routes `/api/*` to the FastAPI service and all other paths to the Next.js service. Set these Vercel project variables:
+
+- `NEXT_PUBLIC_API_URL=/api/v1` (build-time frontend variable)
+- `ENVIRONMENT=production`, `ALLOW_DEV_SECRETS=0`
+- `DATABASE_URL` pointing to a managed PostgreSQL instance
+- Unique `JWT_SECRET` and `FACE_ENCRYPTION_KEY`
+- `CORS_ORIGINS=https://your-domain.example`
+- `TRUSTED_PROXY_IPS` for the Vercel proxy range
+
+Run `alembic upgrade head` as a release step or manually before serving traffic. Vercel functions have ephemeral filesystems, so preload the InsightFace model into persistent storage or use a long-running backend for face features. Use a shared Redis-backed rate limiter when running multiple function instances.
+
 See `docs/architecture.md` for data model and flow details.
