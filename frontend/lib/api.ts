@@ -87,7 +87,8 @@ export function buildUrl(
   const base = /^https?:\/\//i.test(path)
     ? path
     : `${API_BASE_URL}/${path.replace(/^\/+/, "")}`;
-  const url = new URL(base);
+  const isAbsoluteUrl = /^https?:\/\//i.test(base);
+  const url = new URL(base, "http://url.local");
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
       if (value === null || value === undefined || value === "") return;
@@ -101,7 +102,7 @@ export function buildUrl(
       );
     });
   }
-  return url.toString();
+  return isAbsoluteUrl ? url.toString() : `${url.pathname}${url.search}`;
 }
 
 function extractFields(payload: unknown): Record<string, string> {
@@ -237,7 +238,7 @@ export async function apiRequest<T>(
     throw new ApiError({
       status: 0,
       code: "network_error",
-      message: `Unable to reach the API at ${API_BASE_URL}. Start the backend or check NEXT_PUBLIC_API_URL.`,
+      message: `Unable to reach the API at ${API_BASE_URL}. Check the connection and NEXT_PUBLIC_API_URL.`,
     });
   }
 
