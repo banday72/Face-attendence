@@ -509,7 +509,7 @@ function SessionsContent() {
                 {formError}
               </p>
             ) : null}
-            <DialogFooter className="sm:col-span-2">
+            <DialogFooter className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-2 border-t border-border bg-card px-6 py-4 sm:col-span-2">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>

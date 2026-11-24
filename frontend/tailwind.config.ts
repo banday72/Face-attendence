@@ -91,10 +91,15 @@ const config: Config = {
           from: { opacity: "0", transform: "scale(.985)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
+        "dialog-in": {
+          from: { opacity: "0", transform: "translate(-50%, -50%) scale(.985)" },
+          to: { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
+        },
       },
       animation: {
         "fade-in": "fade-in .2s ease-out both",
         "scale-in": "scale-in .15s ease-out both",
+        "dialog-in": "dialog-in .15s ease-out both",
       },
     },
   },
