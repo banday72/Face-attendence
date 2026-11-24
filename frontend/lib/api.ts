@@ -1,8 +1,15 @@
 import { isRecord, normalizePaginated, pick, str } from "@/lib/normalize";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-  "http://localhost:8000/api/v1";
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "");
+const isLocalApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(
+  configuredApiUrl ?? "",
+);
+const useSameOriginApi =
+  process.env.NODE_ENV === "production" && (!configuredApiUrl || isLocalApiUrl);
+
+export const API_BASE_URL = useSameOriginApi
+  ? "/api/v1"
+  : configuredApiUrl || "http://localhost:8000/api/v1";
 
 export type QueryValue =
   | string
