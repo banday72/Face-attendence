@@ -160,6 +160,6 @@ The root `vercel.json` routes `/api/*` to the FastAPI service and all other path
 - `CORS_ORIGINS=https://your-domain.example`
 - `TRUSTED_PROXY_IPS` for the Vercel proxy range
 
-Run `alembic upgrade head` as a release step or manually before serving traffic. Vercel functions have ephemeral filesystems, so preload the InsightFace model into persistent storage or use a long-running backend for face features. Use a shared Redis-backed rate limiter when running multiple function instances.
+Run `alembic upgrade head` as a release step or manually before serving traffic. The Vercel backend installs only `backend/requirements.txt`; the face stack is in `backend/requirements-face.txt` and is intentionally excluded to stay under the 500 MB Python bundle limit. Face endpoints return `503 face_model_unavailable` on Vercel. Deploy the Docker Compose backend (or another long-running Python service that installs both requirements files) for face registration/check-in, and preload the InsightFace model into a persistent volume. Use a shared Redis-backed rate limiter when running multiple instances.
 
 See `docs/architecture.md` for data model and flow details.

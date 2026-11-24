@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY requirements.txt requirements-face.txt ./
+RUN pip install --upgrade pip && pip install -r requirements.txt -r requirements-face.txt
 
 RUN useradd --create-home --shell /bin/bash appuser
 COPY alembic.ini ./

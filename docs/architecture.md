@@ -67,3 +67,5 @@ Audit entries record actor, action, entity, before/after JSON, reason, IP, and u
 ## Deployment
 
 Production requires PostgreSQL, HTTPS, unique secrets, constrained CORS origins, and a trusted proxy configuration. The provided Compose stack is for local development and a deployment reference; it includes migrations, conditional development seeding, persistent database storage, and a persistent face-model cache.
+
+Vercel uses `backend/requirements.txt` for the public FastAPI service. The InsightFace/ONNX/OpenCV/Numpy stack lives in `backend/requirements-face.txt` and is excluded from the serverless bundle to stay under the 500 MB Python function limit; face endpoints return `503 face_model_unavailable` there. Run the Compose stack or another long-running Python service with both requirements files to enable face features.

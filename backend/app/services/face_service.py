@@ -5,12 +5,14 @@ import binascii
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-import numpy as np
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from app.core.config import Settings, settings
 from app.core.errors import AppError
@@ -47,6 +49,15 @@ def _model_unavailable(detail: str) -> AppError:
     )
 
 
+def _np() -> Any:
+    try:
+        import numpy as np
+
+        return np
+    except ImportError as exc:
+        raise _model_unavailable("numpy is not installed in this deployment") from exc
+
+
 def get_face_app() -> Any:
     global _face_app, _face_app_error, _face_app_error_at
     if _face_app is not None:
@@ -73,9 +84,12 @@ def get_face_app() -> Any:
 
 
 def decode_frame(frame: str) -> Any:
+    np = _np()
     try:
         import cv2
-
+    except ImportError as exc:
+        raise _model_unavailable("cv2 is not installed in this deployment") from exc
+    try:
         payload = frame.split(",", 1)[1] if frame.startswith("data:") and "," in frame else frame
         raw = base64.b64decode(payload, validate=True)
         if len(raw) > 10_000_000:
@@ -90,6 +104,7 @@ def decode_frame(frame: str) -> Any:
 
 
 def detect_faces(image: object) -> list[FaceDetection]:
+    np = _np()
     app = get_face_app()
     detections = app.get(image)
     results: list[FaceDetection] = []
@@ -110,6 +125,7 @@ def _centers(detection: FaceDetection) -> tuple[float, float]:
 
 
 def _movement(centers: list[tuple[float, float]]) -> float:
+    np = _np()
     return max(
         (float(np.linalg.norm(np.asarray(a) - np.asarray(b))) for a in centers for b in centers),
         default=0.0,
@@ -120,6 +136,7 @@ def analyze_frames(
     frames: list[str],
     config: Settings = settings,
 ) -> FrameAnalysis:
+    np = _np()
     minimum = config.face_liveness_min_frames
     if len(frames) < minimum:
         raise AppError(
@@ -161,6 +178,7 @@ def analyze_frames(
 
 
 def cosine_similarity(left: np.ndarray | list[float], right: np.ndarray | list[float]) -> float:
+    np = _np()
     a = np.asarray(left, dtype=np.float32)
     b = np.asarray(right, dtype=np.float32)
     norm = float(np.linalg.norm(a) * np.linalg.norm(b))
@@ -170,6 +188,7 @@ def cosine_similarity(left: np.ndarray | list[float], right: np.ndarray | list[f
 
 
 def _stored_embedding(row: FaceEmbedding) -> np.ndarray:
+    np = _np()
     try:
         vector = json.loads(decrypt_secret(row.encrypted_embedding))
     except (ValueError, json.JSONDecodeError) as exc:
