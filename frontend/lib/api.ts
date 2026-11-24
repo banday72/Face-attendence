@@ -230,7 +230,7 @@ export async function apiRequest<T>(
     throw new ApiError({
       status: 0,
       code: "network_error",
-      message: "Unable to reach the server. Check your connection and try again.",
+      message: `Unable to reach the API at ${API_BASE_URL}. Start the backend or check NEXT_PUBLIC_API_URL.`,
     });
   }
 

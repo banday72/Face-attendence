@@ -19,6 +19,7 @@ A full-stack university attendance platform with role-based portals for admins, 
 backend/   FastAPI API, SQLAlchemy models, Alembic migration, services, tests
 frontend/  Next.js 15 application and UI components
 docs/      API contract and architecture notes
+scripts/   Local setup and startup helpers
 ```
 
 ## Quick start with Docker
@@ -51,6 +52,20 @@ docker compose down -v
 ```
 
 ## Local development without Docker
+
+### One-command local startup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
+```
+
+The script creates ignored local `.env` files if missing, runs the Alembic migration, seeds development accounts, starts the API on port 8000 and the frontend on port 3000, then checks both URLs. Open http://localhost:3000/login and sign in with `admin@university.edu` / `Admin123!`. Logs are written to `.dev-logs/`.
+
+If you only want to prepare the environment without starting servers:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -NoStart
+```
 
 ### Prerequisites
 
