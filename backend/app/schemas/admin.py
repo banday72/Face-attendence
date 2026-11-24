@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
-from pydantic import EmailStr, Field, field_validator
+from pydantic import EmailStr, Field, field_validator, model_validator
 
 from app.schemas.auth import Role, UserOut, validate_password
 from app.schemas.common import ORMModel, StrictModel
@@ -144,6 +144,14 @@ class ClassOut(ORMModel):
     capacity: int
     is_active: bool
     created_at: datetime
+    course_name: str | None = None
+    professor_name: str | None = None
+    classroom_id: str | None = None
+    classroom_name: str | None = None
+    schedule_days: list[str] = Field(default_factory=list)
+    start_time: time | None = None
+    end_time: time | None = None
+    enrolled_count: int = 0
 
 
 class EnrollmentOut(ORMModel):
@@ -156,6 +164,43 @@ class EnrollmentOut(ORMModel):
 
 class EnrollmentCreate(StrictModel):
     student_id: str
+
+
+class ScheduleCreate(StrictModel):
+    class_id: str
+    classroom_id: str | None = None
+    day_of_week: int = Field(ge=0, le=6)
+    start_time: time
+    end_time: time
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> ScheduleCreate:
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be later than start_time")
+        return self
+
+
+class ScheduleUpdate(StrictModel):
+    class_id: str | None = None
+    classroom_id: str | None = None
+    day_of_week: int | None = Field(default=None, ge=0, le=6)
+    start_time: time | None = None
+    end_time: time | None = None
+
+
+class ScheduleOut(ORMModel):
+    id: str
+    class_id: str
+    class_name: str | None = None
+    course_id: str | None = None
+    course_name: str | None = None
+    professor_name: str | None = None
+    classroom_id: str | None = None
+    classroom_name: str | None = None
+    day_of_week: int
+    start_time: time
+    end_time: time
+    created_at: datetime
 
 
 class AuditLogOut(ORMModel):

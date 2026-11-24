@@ -45,7 +45,13 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 | GET, PATCH, DELETE | `/admin/classes/{id}` | Manage class |
 | POST | `/admin/classes/{id}/enrollments` | Enroll a student |
 | DELETE | `/admin/classes/{id}/enrollments/{student_id}` | Unenroll a student |
+| GET, POST | `/admin/schedules` | List/create weekly timetable entries |
+| GET, PATCH, DELETE | `/admin/schedules/{id}` | Manage weekly timetable entry |
+| GET | `/admin/face/status/{student_id}` | Registration status for a selected student |
+| POST | `/admin/face/register/{student_id}` | Register a student's face with explicit admin-recorded consent |
 | GET | `/admin/audit-logs` | Query modification history |
+
+Weekly timetable entries use `day_of_week` `0=Monday` through `6=Sunday`, plus `start_time`, `end_time`, and an optional `classroom_id`; the pair `(class_id, day_of_week, start_time)` is unique. `end_time` must be later than `start_time`. Student-facing timetable data is read-only.
 
 ## Academic shared endpoints
 
@@ -56,6 +62,7 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 | GET | `/classrooms` | authenticated | Classroom options with location config |
 | GET | `/professor/classes` | professor | Assigned classes |
 | GET | `/student/classes` | student | Enrolled classes |
+| GET | `/student/schedule` | student | Weekly timetable for enrolled classes |
 
 ## Sessions and QR attendance
 
@@ -82,9 +89,11 @@ Location results are `verified`, `out_of_range`, `unavailable`, or `not_required
 | GET | `/face/status` | student | Registration status and consent metadata |
 | POST | `/face/register` | student | `{ "consent_version": "1.0", "frames": ["data:image/jpeg;base64,..."] }` |
 | DELETE | `/face/me` | student | Delete all biometric embeddings and consent |
+| GET | `/admin/face/status/{student_id}` | admin | Registration status for a selected student |
+| POST | `/admin/face/register/{student_id}` | admin | `{ "consent_version": "1.0", "frames": [...], "consent_confirmed": true, "consent_reference": "form-123" }` |
 | POST | `/attendance/face` | student | `{ "session_id": "...", "frames": [...], "challenge": "turn_left", "latitude": 0, "longitude": 0, "accuracy": 0 }` |
 
-The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Raw images are decoded in memory and never persisted. Embeddings are encrypted at rest with Fernet. Registration requires at least three valid frames with evidence of movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Liveness checks are anti-spoofing heuristics and do not guarantee prevention of a determined replay attack. A professor/manual correction path exists for students unable to use biometrics.
+The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Raw images are decoded in memory and never persisted. Embeddings are encrypted at rest with Fernet. Registration requires at least three valid frames with evidence of movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Student self-registration records the student's explicit consent; admin-on-behalf registration requires `consent_confirmed: true` and an auditable consent reference, and writes an audit entry naming the admin actor and student. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Liveness checks are anti-spoofing heuristics and do not guarantee prevention of a determined replay attack. A professor/manual correction path exists for students unable to use biometrics.
 
 ## Attendance
 

@@ -60,6 +60,8 @@ export const navigation: Record<Role, NavGroup[]> = {
         { label: "Users", href: "/admin/users", icon: Users },
         { label: "Courses", href: "/admin/courses", icon: BookOpen },
         { label: "Classes", href: "/admin/classes", icon: GraduationCap },
+        { label: "Timetable", href: "/admin/timetable", icon: CalendarClock },
+        { label: "Student faces", href: "/admin/student-faces", icon: ScanFace },
       ],
     },
     {
@@ -144,7 +146,8 @@ export function breadcrumbsForPath(pathname: string): string[] {
 export const quickActions: Record<Role, NavItem[]> = {
   admin: [
     { label: "Create class", href: "/admin/classes", icon: GraduationCap },
-    { label: "Add user", href: "/admin/users", icon: Users },
+    { label: "Manage timetable", href: "/admin/timetable", icon: CalendarClock },
+    { label: "Enroll student face", href: "/admin/student-faces", icon: ScanFace },
     { label: "View reports", href: "/admin/reports", icon: FileBarChart },
   ],
   professor: [

@@ -37,3 +37,18 @@ class ScheduleOut(ORMModel):
     start_time: time
     end_time: time
     created_at: datetime
+
+
+class StudentScheduleItem(ORMModel):
+    id: str
+    class_id: str
+    class_name: str | None
+    course_id: str
+    course_name: str
+    professor_name: str | None
+    classroom_id: str | None
+    classroom_name: str | None
+    day_of_week: int
+    day_name: str
+    start_time: time
+    end_time: time

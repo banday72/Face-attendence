@@ -12,7 +12,6 @@ import { TableSkeleton } from "@/components/common/table-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
@@ -27,7 +26,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Pagination } from "@/components/ui/pagination";
 import {
   Select,
@@ -49,34 +47,25 @@ import { useDebouncedValue, useResource } from "@/lib/hooks";
 import {
   normalizeAttendance,
   normalizeClass,
-  normalizeClassroom,
   normalizeCourse,
   normalizePaginated,
   normalizeUser,
 } from "@/lib/normalize";
 import type {
   AttendanceRecord,
-  Classroom,
   ClassItem,
   Course,
   User,
 } from "@/lib/types";
 import { formatTime } from "@/lib/utils";
 
-const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 interface ClassForm {
   name: string;
   section: string;
   course_id: string;
   professor_id: string;
-  classroom_id: string;
-  semester: string;
-  academic_year: string;
+  term: string;
   capacity: string;
-  days: string[];
-  start_time: string;
-  end_time: string;
 }
 
 const emptyForm: ClassForm = {
@@ -84,13 +73,8 @@ const emptyForm: ClassForm = {
   section: "",
   course_id: "",
   professor_id: "",
-  classroom_id: "",
-  semester: "",
-  academic_year: "",
+  term: "",
   capacity: "",
-  days: [],
-  start_time: "",
-  end_time: "",
 };
 
 export default function ClassesPage() {
@@ -120,15 +104,13 @@ export default function ClassesPage() {
   const resource = useResource(loader);
 
   const optionsLoader = useCallback(async () => {
-    const [courses, professors, classrooms] = await Promise.all([
+    const [courses, professors] = await Promise.all([
       api.get<unknown>("/courses"),
       api.get<unknown>("/admin/users", { query: { role: "professor", page_size: 100 } }),
-      api.get<unknown>("/classrooms"),
     ]);
     return {
       courses: normalizePaginated(courses, normalizeCourse).items,
       professors: normalizePaginated(professors, normalizeUser).items,
-      classrooms: normalizePaginated(classrooms, normalizeClassroom).items,
     };
   }, []);
   const options = useResource(optionsLoader);
@@ -166,13 +148,8 @@ export default function ClassesPage() {
       section: item.section ?? "",
       course_id: item.course_id ?? "",
       professor_id: item.professor_id ?? "",
-      classroom_id: item.classroom_id ?? "",
-      semester: item.semester ?? "",
-      academic_year: item.academic_year ?? "",
+      term: item.term ?? "",
       capacity: item.capacity ? String(item.capacity) : "",
-      days: item.schedule_days,
-      start_time: item.start_time?.slice(0, 5) ?? "",
-      end_time: item.end_time?.slice(0, 5) ?? "",
     });
     setFormError(null);
     setFieldErrors({});
@@ -183,8 +160,9 @@ export default function ClassesPage() {
     event.preventDefault();
     const nextErrors: Record<string, string> = {};
     if (!form.name.trim()) nextErrors.name = "Class name is required.";
+    if (!form.section.trim()) nextErrors.section = "Class section/number is required.";
     if (!form.course_id) nextErrors.course_id = "Choose a course.";
-    if (!form.start_time || !form.end_time) nextErrors.schedule = "Add start and end times.";
+    if (!form.term.trim()) nextErrors.term = "Term is required.";
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -193,16 +171,11 @@ export default function ClassesPage() {
     try {
       const payload = {
         name: form.name.trim(),
-        section: form.section.trim() || undefined,
+        section: form.section.trim(),
         course_id: form.course_id,
         professor_id: form.professor_id || null,
-        classroom_id: form.classroom_id || null,
-        semester: form.semester.trim() || undefined,
-        academic_year: form.academic_year.trim() || undefined,
+        term: form.term.trim(),
         capacity: form.capacity ? Number(form.capacity) : undefined,
-        schedule_days: form.days,
-        start_time: form.start_time || undefined,
-        end_time: form.end_time || undefined,
       };
       if (editing) {
         await api.patch(`/admin/classes/${editing.id}`, payload);
@@ -366,7 +339,7 @@ export default function ClassesPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {[item.semester, item.academic_year].filter(Boolean).join(" · ") || "—"}
+                          {item.term || "—"}
                         </TableCell>
                         <TableCell>
                           <RowActions
@@ -404,7 +377,7 @@ export default function ClassesPage() {
         <DialogContent className="max-h-[92vh] sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit class" : "New class"}</DialogTitle>
-            <DialogDescription>Assign a course, professor, room, and weekly schedule.</DialogDescription>
+            <DialogDescription>Assign a course, professor, class number, and term. Use Timetable for meeting times.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2" noValidate>
             <FormField label="Class name" htmlFor="class-name" required error={fieldErrors.name}>
@@ -458,24 +431,6 @@ export default function ClassesPage() {
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Classroom" htmlFor="class-classroom">
-              <Select
-                value={form.classroom_id || "none"}
-                onValueChange={(value) =>
-                  setForm((current) => ({ ...current, classroom_id: value === "none" ? "" : value }))
-                }
-              >
-                <SelectTrigger id="class-classroom">
-                  <SelectValue placeholder="No room" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No room</SelectItem>
-                  {(options.data?.classrooms ?? []).map((classroom: Classroom) => (
-                    <SelectItem key={classroom.id} value={classroom.id}>{classroom.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormField>
             <FormField label="Capacity" htmlFor="class-capacity">
               <Input
                 id="class-capacity"
@@ -485,67 +440,14 @@ export default function ClassesPage() {
                 onChange={(event) => setForm((current) => ({ ...current, capacity: event.target.value }))}
               />
             </FormField>
-            <FormField label="Semester" htmlFor="class-semester">
+            <FormField label="Term" htmlFor="class-term" required error={fieldErrors.term}>
               <Input
-                id="class-semester"
-                value={form.semester}
-                onChange={(event) => setForm((current) => ({ ...current, semester: event.target.value }))}
-                placeholder="Fall"
+                id="class-term"
+                value={form.term}
+                onChange={(event) => setForm((current) => ({ ...current, term: event.target.value }))}
+                placeholder="Fall 2026"
               />
             </FormField>
-            <FormField label="Academic year" htmlFor="class-year">
-              <Input
-                id="class-year"
-                value={form.academic_year}
-                onChange={(event) => setForm((current) => ({ ...current, academic_year: event.target.value }))}
-                placeholder="2025-2026"
-              />
-            </FormField>
-            <FormField label="Start time" htmlFor="class-start" error={fieldErrors.schedule}>
-              <Input
-                id="class-start"
-                type="time"
-                value={form.start_time}
-                onChange={(event) => setForm((current) => ({ ...current, start_time: event.target.value }))}
-              />
-            </FormField>
-            <FormField label="End time" htmlFor="class-end">
-              <Input
-                id="class-end"
-                type="time"
-                value={form.end_time}
-                onChange={(event) => setForm((current) => ({ ...current, end_time: event.target.value }))}
-              />
-            </FormField>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Meeting days</Label>
-              <div className="flex flex-wrap gap-2">
-                {WEEK_DAYS.map((day) => {
-                  const checked = form.days.includes(day);
-                  return (
-                    <label
-                      key={day}
-                      className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                        checked ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"
-                      }`}
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={() =>
-                          setForm((current) => ({
-                            ...current,
-                            days: checked
-                              ? current.days.filter((value) => value !== day)
-                              : [...current.days, day],
-                          }))
-                        }
-                      />
-                      {day}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
             {formError ? (
               <p className="sm:col-span-2 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}

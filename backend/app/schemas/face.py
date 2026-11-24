@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -37,3 +38,8 @@ class FaceRegisterOut(StrictModel):
     model_name: str
     consent_version: str
     similarity_threshold: float
+
+
+class AdminFaceRegisterIn(FaceRegisterIn):
+    consent_confirmed: Literal[True]
+    consent_reference: str = Field(min_length=1, max_length=100)

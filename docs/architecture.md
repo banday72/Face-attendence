@@ -26,6 +26,7 @@ Important constraints:
 
 - `users.email`, `students.university_id`, and `professors.employee_id` are unique.
 - `enrollments` are unique per `(student_id, class_id)`.
+- `schedules` are unique per `(class_id, day_of_week, start_time)`; admins own weekly timetable CRUD and students receive a read-only projection.
 - `attendance_records` are unique per `(session_id, student_id)`.
 - `qr_token_usages` are unique per `(session_id, token_hash, student_id)`.
 - Foreign keys connect attendance to sessions, students, classes, courses, professors, and classrooms.
@@ -43,7 +44,7 @@ Important constraints:
 
 ## Face flow
 
-1. Student grants camera permission and explicitly consents to the current biometric policy version.
+1. Student grants camera permission and explicitly consents to the current biometric policy version. An admin may capture on a student's behalf only by recording `consent_confirmed` and a consent reference that is written to the audit log.
 2. Browser captures multiple compressed frames while prompting an active movement challenge.
 3. Backend decodes frames in memory, requires exactly one face per frame, detects movement, and computes normalized embeddings using InsightFace.
 4. Embeddings are compared against all other registered students to prevent duplicates, then encrypted with Fernet and stored.
@@ -54,7 +55,7 @@ Liveness is intentionally a heuristic: frame count, single-face detection, and m
 
 ## Authorization
 
-- Admin: system-wide management and reports.
+- Admin: system-wide management, weekly timetable CRUD, audited face enrollment on behalf of students, and reports.
 - Professor: CRUD only for assigned classes/sessions, live rosters, and audited corrections.
 - Student: self-registration, self check-ins, and read-only access to their own attendance.
 

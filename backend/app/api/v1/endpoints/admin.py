@@ -10,18 +10,22 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints._helpers import pagination
 from app.core.audit import write_audit_log
+from app.core.config import settings
 from app.core.deps import DB_Dependency, require_admin
 from app.core.errors import AppError
+from app.core.rate_limit import face_register_limit
 from app.core.security import hash_password
 from app.models import (
     AttendanceRecord,
     AttendanceSession,
     AuditLog,
     Class_,
+    Classroom,
     Course,
     Department,
     Enrollment,
     Professor,
+    Schedule,
     Student,
     User,
 )
@@ -39,12 +43,17 @@ from app.schemas.admin import (
     DepartmentUpdate,
     EnrollmentCreate,
     EnrollmentOut,
+    ScheduleCreate,
+    ScheduleOut,
+    ScheduleUpdate,
     UserAdminOut,
     UserCreate,
     UserUpdate,
 )
 from app.schemas.auth import Role
 from app.schemas.common import Page, apply_sort, paginate
+from app.schemas.face import AdminFaceRegisterIn, FaceRegisterOut, FaceStatusOut
+from app.services import class_service, face_service
 from app.utils.uuid import new_uuid, utcnow
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -543,7 +552,14 @@ def list_classes(
         pattern = f"%{search}%"
         query = query.where(or_(Class_.section.ilike(pattern), Class_.term.ilike(pattern), Class_.name.ilike(pattern)))
     query = apply_sort(query, getattr(Class_, sort_by), params)
-    return paginate(db, query, params)
+    result = paginate(db, query, params)
+    return Page[ClassOut](
+        items=[class_service.class_to_out(db, class_) for class_ in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
 
 
 def _validate_class_refs(db: Session, payload: Any) -> None:
@@ -557,7 +573,7 @@ def _validate_class_refs(db: Session, payload: Any) -> None:
 @router.post("/classes", response_model=ClassOut, status_code=status.HTTP_201_CREATED)
 def create_class(
     payload: ClassCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
-) -> Class_:
+) -> ClassOut:
     _validate_class_refs(db, payload)
     class_ = Class_(
         id=new_uuid(),
@@ -589,12 +605,12 @@ def create_class(
         db.rollback()
         raise AppError(409, "conflict", "Class with this course, section, and term already exists") from exc
     db.refresh(class_)
-    return class_
+    return class_service.class_to_out(db, class_)
 
 
 @router.get("/classes/{class_id}", response_model=ClassOut)
-def get_class(class_id: str, db: DB_Dependency) -> Class_:
-    return _get_or_404(db, Class_, class_id, "Class")
+def get_class(class_id: str, db: DB_Dependency) -> ClassOut:
+    return class_service.class_to_out(db, _get_or_404(db, Class_, class_id, "Class"))
 
 
 @router.patch("/classes/{class_id}", response_model=ClassOut)
@@ -604,7 +620,7 @@ def update_class(
     request: Request,
     db: DB_Dependency,
     actor: User = Depends(require_admin),
-) -> Class_:
+) -> ClassOut:
     class_ = _get_or_404(db, Class_, class_id, "Class")
     if payload.course_id:
         _get_or_404(db, Course, payload.course_id, "Course")
@@ -627,7 +643,7 @@ def update_class(
     except IntegrityError as exc:
         db.rollback()
         raise AppError(409, "conflict", "Class update conflicts with an existing class") from exc
-    return class_
+    return class_service.class_to_out(db, class_)
 
 
 @router.delete("/classes/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -716,6 +732,201 @@ def unenroll_student(
     db.delete(enrollment)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/schedules", response_model=Page[ScheduleOut])
+def list_schedules(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    class_id: str | None = None,
+    classroom_id: str | None = None,
+    day_of_week: int | None = Query(None, ge=0, le=6),
+    sort_by: Literal["day_of_week", "start_time", "created_at"] = "day_of_week",
+    sort_order: Literal["asc", "desc"] = "asc",
+) -> Page[ScheduleOut]:
+    params = pagination(page, page_size, sort_by, sort_order)
+    query = select(Schedule)
+    if class_id:
+        query = query.where(Schedule.class_id == class_id)
+    if classroom_id:
+        query = query.where(Schedule.classroom_id == classroom_id)
+    if day_of_week is not None:
+        query = query.where(Schedule.day_of_week == day_of_week)
+    query = apply_sort(query, getattr(Schedule, sort_by), params)
+    result = paginate(db, query, params)
+    return Page[ScheduleOut](
+        items=[class_service.schedule_to_out(db, schedule) for schedule in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
+@router.post("/schedules", response_model=ScheduleOut, status_code=status.HTTP_201_CREATED)
+def create_schedule(
+    payload: ScheduleCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
+) -> ScheduleOut:
+    _get_or_404(db, Class_, payload.class_id, "Class")
+    if payload.classroom_id:
+        _get_or_404(db, Classroom, payload.classroom_id, "Classroom")
+    schedule = Schedule(
+        id=new_uuid(),
+        class_id=payload.class_id,
+        classroom_id=payload.classroom_id,
+        day_of_week=payload.day_of_week,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    try:
+        db.add(schedule)
+        db.flush()
+        write_audit_log(
+            db,
+            action="schedule.create",
+            entity_type="schedule",
+            entity_id=schedule.id,
+            actor=actor,
+            after=_snapshot(schedule, ["id", "class_id", "classroom_id", "day_of_week", "start_time", "end_time"]),
+            request=request,
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise AppError(409, "conflict", "Schedule already exists for this class, day, and start time") from exc
+    db.refresh(schedule)
+    return class_service.schedule_to_out(db, schedule)
+
+
+@router.get("/schedules/{schedule_id}", response_model=ScheduleOut)
+def get_schedule(schedule_id: str, db: DB_Dependency) -> ScheduleOut:
+    return class_service.schedule_to_out(db, _get_or_404(db, Schedule, schedule_id, "Schedule"))
+
+
+@router.patch("/schedules/{schedule_id}", response_model=ScheduleOut)
+def update_schedule(
+    schedule_id: str,
+    payload: ScheduleUpdate,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> ScheduleOut:
+    schedule = _get_or_404(db, Schedule, schedule_id, "Schedule")
+    updates = payload.model_dump(exclude_unset=True)
+    before = _snapshot(schedule, list(updates))
+    for key, value in updates.items():
+        setattr(schedule, key, value)
+    _get_or_404(db, Class_, schedule.class_id, "Class")
+    if schedule.classroom_id:
+        _get_or_404(db, Classroom, schedule.classroom_id, "Classroom")
+    if schedule.end_time <= schedule.start_time:
+        raise AppError(422, "validation_error", "end_time must be later than start_time")
+    schedule.updated_at = utcnow()
+    write_audit_log(
+        db,
+        action="schedule.update",
+        entity_type="schedule",
+        entity_id=schedule.id,
+        actor=actor,
+        before=before,
+        after=_snapshot(schedule, ["id", "class_id", "classroom_id", "day_of_week", "start_time", "end_time"]),
+        request=request,
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise AppError(409, "conflict", "Schedule already exists for this class, day, and start time") from exc
+    return class_service.schedule_to_out(db, schedule)
+
+
+@router.delete("/schedules/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_schedule(
+    schedule_id: str, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
+) -> Response:
+    schedule = _get_or_404(db, Schedule, schedule_id, "Schedule")
+    write_audit_log(
+        db,
+        action="schedule.delete",
+        entity_type="schedule",
+        entity_id=schedule.id,
+        actor=actor,
+        before=_snapshot(schedule, ["id", "class_id", "classroom_id", "day_of_week", "start_time", "end_time"]),
+        request=request,
+    )
+    db.delete(schedule)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/face/status/{student_id}", response_model=FaceStatusOut)
+def admin_face_status(student_id: str, db: DB_Dependency) -> FaceStatusOut:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise AppError(404, "not_found", "Student not found")
+    consent = student.consent
+    count = face_service.active_embedding_count(db, student)
+    return FaceStatusOut(
+        is_registered=count > 0,
+        embedding_count=count,
+        model_name=settings.face_model_name,
+        consent_version=consent.consent_version if consent else None,
+        consented_at=consent.consented_at if consent else None,
+        requires_new_consent=consent is None
+        or not consent.is_active
+        or consent.consent_version != settings.biometric_consent_version,
+        liveness_min_frames=settings.face_liveness_min_frames,
+    )
+
+
+@router.post("/face/register/{student_id}", response_model=FaceRegisterOut, status_code=status.HTTP_201_CREATED)
+@face_register_limit
+def admin_register_face(
+    student_id: str,
+    payload: AdminFaceRegisterIn,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> FaceRegisterOut:
+    if payload.consent_version != settings.biometric_consent_version:
+        raise AppError(
+            422,
+            "validation_error",
+            "Biometric consent version is outdated",
+            {"expected_version": settings.biometric_consent_version},
+        )
+    student = db.get(Student, student_id)
+    if student is None:
+        raise AppError(404, "not_found", "Student not found")
+    analysis = face_service.analyze_frames(payload.frames)
+    count = face_service.register_embeddings(db, student, analysis)
+    face_service.set_consent(db, student, payload.consent_version)
+    write_audit_log(
+        db,
+        action="face.register_admin",
+        entity_type="student",
+        entity_id=student.id,
+        actor=actor,
+        after={
+            "embedding_count": count,
+            "consent_version": payload.consent_version,
+            "consent_reference": payload.consent_reference,
+            "consent_confirmed_by": actor.id,
+            "model": settings.face_model_name,
+        },
+        reason=f"Admin-recorded biometric consent: {payload.consent_reference}",
+        request=request,
+    )
+    db.commit()
+    return FaceRegisterOut(
+        embedding_count=count,
+        model_name=settings.face_model_name,
+        consent_version=payload.consent_version,
+        similarity_threshold=settings.face_match_threshold,
+    )
 
 
 @router.get("/audit-logs", response_model=Page[AuditLogOut])

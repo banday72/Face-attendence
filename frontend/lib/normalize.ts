@@ -14,6 +14,7 @@ import type {
   ProfessorDashboard,
   QrPayload,
   ReportSummary,
+  ScheduleItem,
   Session,
   SessionStatus,
   StudentDashboard,
@@ -215,6 +216,7 @@ export function normalizeClass(value: unknown): ClassItem {
     classroom_name:
       pick(raw, ["classroom_name"]) || pick(classroom, ["name", "room"]),
     department_id: pick(raw, ["department_id"]),
+    term: pick(raw, ["term"]),
     semester: pick(raw, ["semester"]),
     academic_year: pick(raw, ["academic_year"]),
     capacity: pickNumber(raw, ["capacity"], Number.NaN),
@@ -230,6 +232,30 @@ export function normalizeClass(value: unknown): ClassItem {
     start_time: pick(raw, ["start_time", "starts_at", "time_from"]),
     end_time: pick(raw, ["end_time", "ends_at", "time_to"]),
     status: pick(raw, ["status"]),
+  };
+}
+
+export function normalizeSchedule(value: unknown): ScheduleItem {
+  const raw = toRaw(value);
+  const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const classRaw = toRaw(raw.class);
+  const classroomRaw = toRaw(raw.classroom);
+  const dayOfWeek = pickNumber(raw, ["day_of_week"], Number.NaN);
+  return {
+    id: idOf(raw),
+    class_id: idOf(classRaw) || pick(raw, ["class_id"]),
+    class_name: pick(raw, ["class_name"]) || pick(classRaw, ["name"]),
+    course_id: pick(raw, ["course_id"]),
+    course_name: pick(raw, ["course_name"]) || pick(toRaw(raw.course), ["name"]),
+    professor_name: pick(raw, ["professor_name"]),
+    classroom_id: idOf(classroomRaw) || pick(raw, ["classroom_id"]),
+    classroom_name: pick(raw, ["classroom_name"]) || pick(classroomRaw, ["name"]),
+    day_of_week: dayOfWeek,
+    day_name:
+      pick(raw, ["day_name"]) ||
+      (Number.isFinite(dayOfWeek) && dayOfWeek >= 0 && dayOfWeek <= 6 ? weekDays[dayOfWeek] : undefined),
+    start_time: pick(raw, ["start_time"]),
+    end_time: pick(raw, ["end_time"]),
   };
 }
 

@@ -76,6 +76,7 @@ export interface ClassItem {
   classroom_id?: string;
   classroom_name?: string;
   department_id?: string;
+  term?: string;
   semester?: string;
   academic_year?: string;
   capacity?: number;
@@ -84,6 +85,21 @@ export interface ClassItem {
   start_time?: string;
   end_time?: string;
   status?: string;
+}
+
+export interface ScheduleItem {
+  id: string;
+  class_id: string;
+  class_name?: string;
+  course_id?: string;
+  course_name?: string;
+  professor_name?: string;
+  classroom_id?: string;
+  classroom_name?: string;
+  day_of_week: number;
+  day_name?: string;
+  start_time: string;
+  end_time: string;
 }
 
 export interface Session {

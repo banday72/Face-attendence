@@ -2,6 +2,7 @@
 
 import { CalendarDays, Clock, MapPin } from "lucide-react";
 import { useCallback } from "react";
+import { format } from "date-fns";
 
 import { PageHeader } from "@/components/common/page-header";
 import { QueryState } from "@/components/common/query-state";
@@ -12,9 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import { normalizeClass, normalizePaginated } from "@/lib/normalize";
+import { normalizePaginated, normalizeSchedule } from "@/lib/normalize";
+import type { ScheduleItem } from "@/lib/types";
 import { formatTime } from "@/lib/utils";
-import { format } from "date-fns";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const dayNames: Record<string, string> = {
@@ -31,8 +32,8 @@ export default function StudentSchedulePage() {
   const loader = useCallback(
     () =>
       api
-        .get<unknown>("/student/classes", { query: { page_size: 200 } })
-        .then((payload) => normalizePaginated(payload, normalizeClass).items),
+        .get<unknown>("/student/schedule", { query: { page_size: 200 } })
+        .then((payload) => normalizePaginated(payload, normalizeSchedule).items),
     [],
   );
   const resource = useResource(loader);
@@ -52,11 +53,13 @@ export default function StudentSchedulePage() {
         data={resource.data}
         onRetry={resource.reload}
         skeleton={<Skeleton className="h-96 rounded-2xl" />}
-        emptyTitle="No classes scheduled"
-        emptyDescription="Your timetable will appear once you are enrolled in classes."
+        emptyTitle="No timetable available"
+        emptyDescription="Your classes have not published meeting days yet. Check back after registration."
       >
-        {(classes) => {
-          const scheduled = classes.filter((item) => item.schedule_days.length > 0);
+        {(items) => {
+          const scheduled = items.filter(
+            (item) => Number.isFinite(item.day_of_week) && item.day_of_week >= 0 && item.day_of_week <= 6,
+          );
           if (!scheduled.length) {
             return (
               <EmptyState
@@ -76,20 +79,20 @@ export default function StudentSchedulePage() {
                   </TabsTrigger>
                 ))}
               </TabsList>
-              {DAYS.map((day) => {
-                const dayClasses = scheduled
-                  .filter((item) => item.schedule_days.includes(day))
-                  .sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
+              {DAYS.map((day, index) => {
+                const dayItems: ScheduleItem[] = scheduled
+                  .filter((item) => item.day_of_week === index)
+                  .sort((a, b) => a.start_time.localeCompare(b.start_time));
                 return (
                   <TabsContent key={day} value={day} className="space-y-3">
-                    {dayClasses.length === 0 ? (
+                    {dayItems.length === 0 ? (
                       <EmptyState
                         title={`No classes on ${dayNames[day]}`}
                         description="Use another day tab to view your timetable."
                         icon={CalendarDays}
                       />
                     ) : (
-                      dayClasses.map((item) => (
+                      dayItems.map((item) => (
                         <Card key={item.id} className="overflow-hidden">
                           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
                             <div className="flex w-full shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10 px-4 py-3 text-primary sm:w-32">
@@ -98,8 +101,8 @@ export default function StudentSchedulePage() {
                             </div>
                             <div className="min-w-0 flex-1 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="text-base font-semibold">{item.course_name || item.name}</h3>
-                                <Badge variant="secondary">{item.name}</Badge>
+                                <h3 className="text-base font-semibold">{item.course_name || item.class_name}</h3>
+                                {item.class_name ? <Badge variant="secondary">{item.class_name}</Badge> : null}
                               </div>
                               <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1.5">
