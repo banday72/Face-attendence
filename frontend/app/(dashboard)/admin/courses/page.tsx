@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, Plus, RefreshCw, Search } from "lucide-react";
+import { BookOpen, Plus, RefreshCw, Search, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -9,6 +10,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { QueryState } from "@/components/common/query-state";
 import { RowActions } from "@/components/common/row-actions";
 import { TableSkeleton } from "@/components/common/table-skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -20,6 +22,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import {
@@ -40,8 +46,19 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, api, errorMessage } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
-import { normalizeCourse, normalizeDepartment, normalizePaginated } from "@/lib/normalize";
-import type { Course, Department } from "@/lib/types";
+import {
+  normalizeCourse,
+  normalizeCourseProfessor,
+  normalizeDepartment,
+  normalizePaginated,
+  normalizeProfessorOption,
+} from "@/lib/normalize";
+import type {
+  Course,
+  CourseProfessor,
+  Department,
+  ProfessorOption,
+} from "@/lib/types";
 
 interface CourseForm {
   name: string;
@@ -51,9 +68,10 @@ interface CourseForm {
   description: string;
 }
 
-const emptyForm: CourseForm = { name: "", code: "", credits: "", department_id: "", description: "" };
+const emptyForm: CourseForm = { name: "", code: "", credits: "3", department_id: "", description: "" };
 
 export default function CoursesPage() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
@@ -65,6 +83,12 @@ export default function CoursesPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Course | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [assigning, setAssigning] = useState<Course | null>(null);
+  const [assigned, setAssigned] = useState<CourseProfessor[]>([]);
+  const [professors, setProfessors] = useState<ProfessorOption[]>([]);
+  const [selectedProfessor, setSelectedProfessor] = useState("");
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignLoading, setAssignLoading] = useState(false);
 
   const loader = useCallback(
     () =>
@@ -80,6 +104,11 @@ export default function CoursesPage() {
   );
   const departments = useResource<Department[]>(departmentsLoader);
 
+  const reloadAssignments = useCallback(async (courseId: string) => {
+    const payload = await api.get<unknown>(`/admin/courses/${courseId}/professors`);
+    setAssigned((payload as unknown[]).map(normalizeCourseProfessor));
+  }, []);
+
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
@@ -93,7 +122,7 @@ export default function CoursesPage() {
     setForm({
       name: course.name,
       code: course.code ?? "",
-      credits: course.credits ? String(course.credits) : "",
+      credits: course.credits ? String(course.credits) : "3",
       department_id: course.department_id ?? "",
       description: course.description ?? "",
     });
@@ -102,11 +131,32 @@ export default function CoursesPage() {
     setDialogOpen(true);
   };
 
+  const openAssign = async (course: Course) => {
+    setAssigning(course);
+    setSelectedProfessor("");
+    setAssignError(null);
+    setAssignLoading(true);
+    try {
+      const [options] = await Promise.all([
+        api.get<unknown>("/admin/professors", { query: { page_size: 100 } }),
+        reloadAssignments(course.id),
+      ]);
+      setProfessors(normalizePaginated(options, normalizeProfessorOption).items);
+    } catch (error) {
+      setAssignError(errorMessage(error));
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextErrors: Record<string, string> = {};
     if (!form.name.trim()) nextErrors.name = "Course name is required.";
-    if (form.credits && Number(form.credits) < 0) nextErrors.credits = "Credits cannot be negative.";
+    if (form.code.trim().length < 2) nextErrors.code = "Use a course code of at least 2 characters.";
+    if (!form.department_id) nextErrors.department_id = "Choose a department.";
+    const credits = Number(form.credits || 3);
+    if (!Number.isFinite(credits) || credits < 1 || credits > 12) nextErrors.credits = "Credits must be between 1 and 12.";
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -115,9 +165,9 @@ export default function CoursesPage() {
     try {
       const payload = {
         name: form.name.trim(),
-        code: form.code.trim() || undefined,
-        credits: form.credits ? Number(form.credits) : undefined,
-        department_id: form.department_id || null,
+        code: form.code.trim(),
+        credits,
+        department_id: form.department_id,
         description: form.description.trim() || undefined,
       };
       if (editing) {
@@ -152,16 +202,60 @@ export default function CoursesPage() {
     }
   };
 
+  const handleAssign = async () => {
+    if (!assigning || !selectedProfessor) {
+      setAssignError("Choose a professor first.");
+      return;
+    }
+    setAssignLoading(true);
+    setAssignError(null);
+    try {
+      await api.post(`/admin/courses/${assigning.id}/professors/${selectedProfessor}`);
+      toast.success("Professor assigned to course");
+      setSelectedProfessor("");
+      await reloadAssignments(assigning.id);
+    } catch (error) {
+      setAssignError(errorMessage(error));
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const handleUnassign = async (professorId: string) => {
+    if (!assigning) return;
+    setAssignLoading(true);
+    setAssignError(null);
+    try {
+      await api.delete(`/admin/courses/${assigning.id}/professors/${professorId}`);
+      toast.success("Professor unassigned");
+      await reloadAssignments(assigning.id);
+    } catch (error) {
+      setAssignError(errorMessage(error));
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const availableProfessors = professors.filter(
+    (professor) => !assigned.some((item) => item.professor_id === professor.id),
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Management"
         title="Courses"
-        description="Define the courses offered across your departments."
+        description="Define courses, assign professors, and open the related class sections."
         actions={
           <>
             <Button variant="outline" onClick={resource.reload}>
               <RefreshCw /> Refresh
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/admin/departments")}>
+              Departments
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/admin/classes")}>
+              Class sections
             </Button>
             <Button onClick={openCreate}>
               <Plus /> New course
@@ -194,7 +288,7 @@ export default function CoursesPage() {
           onRetry={resource.reload}
           skeleton={<TableSkeleton columns={6} />}
           emptyTitle="No courses yet"
-          emptyDescription="Add a course to start creating classes."
+          emptyDescription="Add a course to start creating class sections."
         >
           {(data) =>
             data.items.length === 0 ? (
@@ -234,6 +328,14 @@ export default function CoursesPage() {
                             onEdit={() => openEdit(course)}
                             onDelete={() => setDeleting(course)}
                             label={`Actions for ${course.name}`}
+                            extra={
+                              <>
+                                <DropdownMenuItem onSelect={() => void openAssign(course)}>
+                                  <Users /> Assign teachers
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            }
                           />
                         </TableCell>
                       </TableRow>
@@ -257,7 +359,7 @@ export default function CoursesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit course" : "New course"}</DialogTitle>
-            <DialogDescription>Course details are used across classes and reports.</DialogDescription>
+            <DialogDescription>Course details are used across classes, assignments, and reports.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2" noValidate>
             <FormField label="Course name" htmlFor="course-name" required error={fieldErrors.name}>
@@ -267,14 +369,14 @@ export default function CoursesPage() {
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               />
             </FormField>
-            <FormField label="Code" htmlFor="course-code" error={fieldErrors.code}>
+            <FormField label="Code" htmlFor="course-code" required error={fieldErrors.code}>
               <Input
                 id="course-code"
                 value={form.code}
                 onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))}
               />
             </FormField>
-            <FormField label="Department" htmlFor="course-department">
+            <FormField label="Department" htmlFor="course-department" required error={fieldErrors.department_id}>
               <Select
                 value={form.department_id || "none"}
                 onValueChange={(value) =>
@@ -282,10 +384,10 @@ export default function CoursesPage() {
                 }
               >
                 <SelectTrigger id="course-department">
-                  <SelectValue placeholder="No department" />
+                  <SelectValue placeholder="Choose department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No department</SelectItem>
+                  <SelectItem value="none" disabled>Choose department</SelectItem>
                   {(departments.data ?? []).map((department) => (
                     <SelectItem key={department.id} value={department.id}>{department.name}</SelectItem>
                   ))}
@@ -296,7 +398,8 @@ export default function CoursesPage() {
               <Input
                 id="course-credits"
                 type="number"
-                min={0}
+                min={1}
+                max={12}
                 value={form.credits}
                 onChange={(event) => setForm((current) => ({ ...current, credits: event.target.value }))}
               />
@@ -327,6 +430,80 @@ export default function CoursesPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(assigning)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssigning(null);
+            setAssignError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Teachers for {assigning?.name ?? "course"}</DialogTitle>
+            <DialogDescription>
+              Course assignments are separate from class sections. Assign a class professor to control attendance access.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Select value={selectedProfessor} onValueChange={setSelectedProfessor}>
+                <SelectTrigger className="sm:flex-1">
+                  <SelectValue placeholder="Choose professor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProfessors.map((professor) => (
+                    <SelectItem key={professor.id} value={professor.id}>
+                      {professor.full_name} · {professor.employee_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" onClick={() => void handleAssign()} loading={assignLoading}>
+                Assign teacher
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {assigned.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  No teachers assigned to this course yet.
+                </p>
+              ) : (
+                assigned.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between rounded-md border border-border p-3">
+                    <div>
+                      <p className="text-sm font-medium">{item.full_name}</p>
+                      <p className="text-xs text-muted-foreground">{item.email} · {item.employee_id}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      loading={assignLoading}
+                      onClick={() => void handleUnassign(item.professor_id)}
+                    >
+                      Unassign
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+            {assignError ? (
+              <p className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+                {assignError}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Badge variant="secondary">{assigned.length} assigned</Badge>
+            <Button type="button" variant="outline" onClick={() => setAssigning(null)}>
+              Done
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

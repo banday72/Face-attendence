@@ -7,17 +7,20 @@ import type {
   ClassItem,
   Course,
   CourseProgress,
+  CourseProfessor,
   Department,
   FaceStatus,
   NameValue,
   Paginated,
   ProfessorDashboard,
+  ProfessorOption,
   QrPayload,
   ReportSummary,
   ScheduleItem,
   Session,
   SessionStatus,
   StudentDashboard,
+  StudentOption,
   TrendPoint,
   User,
 } from "@/lib/types";
@@ -145,6 +148,11 @@ export function normalizeUser(value: unknown): User {
     full_name: pick(raw, ["full_name", "fullName", "name", "username"], "User"),
     email: pick(raw, ["email", "user_email"]),
     university_id: pick(raw, ["university_id", "student_id", "roll_number"]),
+    employee_id: pick(raw, ["employee_id", "staff_id"]),
+    program: pick(raw, ["program"]),
+    year_level: pickNumber(raw, ["year_level"], 0) || undefined,
+    title: pick(raw, ["title"]),
+    office: pick(raw, ["office"]),
     role: (pick(raw, ["role", "user_role"], "student").toLowerCase() as User["role"]),
     department_id: idOf(raw.department) || pick(raw, ["department_id"]),
     department_name: pick(raw, ["department_name"]) ||
@@ -152,6 +160,51 @@ export function normalizeUser(value: unknown): User {
     phone: pick(raw, ["phone", "phone_number"]),
     is_active: raw.is_active === undefined ? true : bool(raw.is_active, true),
     created_at: pick(raw, ["created_at", "createdAt"]),
+  };
+}
+
+export function normalizeProfessorOption(value: unknown): ProfessorOption {
+  const raw = toRaw(value);
+  return {
+    id: idOf(raw),
+    user_id: pick(raw, ["user_id"]),
+    email: pick(raw, ["email"]),
+    full_name: pick(raw, ["full_name", "name"], "Professor"),
+    employee_id: pick(raw, ["employee_id"]),
+    department_id: idOf(raw.department) || pick(raw, ["department_id"]),
+    department_name: pick(raw, ["department_name"]) || pick(toRaw(raw.department), ["name"]),
+    title: pick(raw, ["title"]),
+    is_active: raw.is_active === undefined ? true : bool(raw.is_active, true),
+  };
+}
+
+export function normalizeStudentOption(value: unknown): StudentOption {
+  const raw = toRaw(value);
+  return {
+    id: idOf(raw),
+    user_id: pick(raw, ["user_id"]),
+    email: pick(raw, ["email"]),
+    full_name: pick(raw, ["full_name", "name"], "Student"),
+    university_id: pick(raw, ["university_id"]),
+    department_id: idOf(raw.department) || pick(raw, ["department_id"]),
+    department_name: pick(raw, ["department_name"]) || pick(toRaw(raw.department), ["name"]),
+    program: pick(raw, ["program"]),
+    year_level: pickNumber(raw, ["year_level"], 0) || undefined,
+    is_active: raw.is_active === undefined ? true : bool(raw.is_active, true),
+  };
+}
+
+export function normalizeCourseProfessor(value: unknown): CourseProfessor {
+  const raw = toRaw(value);
+  return {
+    id: pick(raw, ["id"]) || `${pick(raw, ["course_id"])}:${pick(raw, ["professor_id"])}`,
+    course_id: pick(raw, ["course_id"]),
+    professor_id: idOf(raw.professor) || pick(raw, ["professor_id"]),
+    full_name: pick(raw, ["full_name", "name"], "Professor"),
+    email: pick(raw, ["email"]),
+    employee_id: pick(raw, ["employee_id"]),
+    department_name: pick(raw, ["department_name"]) || pick(toRaw(raw.department), ["name"]),
+    assigned_at: pick(raw, ["assigned_at", "created_at"]),
   };
 }
 
@@ -226,6 +279,7 @@ export function normalizeClass(value: unknown): ClassItem {
       "students_count",
       "total_students",
     ], Number.NaN),
+    is_active: raw.is_active === undefined ? true : bool(raw.is_active, true),
     schedule_days: stringList(
       raw.schedule_days ?? raw.days ?? raw.schedule ?? raw.meeting_days,
     ),

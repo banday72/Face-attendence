@@ -42,20 +42,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 import { ApiError, api, errorMessage } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
 import {
   normalizeAttendance,
   normalizeClass,
   normalizeCourse,
+  normalizeDepartment,
   normalizePaginated,
-  normalizeUser,
+  normalizeProfessorOption,
+  normalizeStudentOption,
 } from "@/lib/normalize";
 import type {
   AttendanceRecord,
   ClassItem,
   Course,
-  User,
+  Department,
+  ProfessorOption,
+  StudentOption,
 } from "@/lib/types";
 import { formatTime } from "@/lib/utils";
 
@@ -64,8 +69,10 @@ interface ClassForm {
   section: string;
   course_id: string;
   professor_id: string;
+  department_id: string;
   term: string;
   capacity: string;
+  is_active: boolean;
 }
 
 const emptyForm: ClassForm = {
@@ -73,8 +80,10 @@ const emptyForm: ClassForm = {
   section: "",
   course_id: "",
   professor_id: "",
+  department_id: "",
   term: "",
   capacity: "",
+  is_active: true,
 };
 
 export default function ClassesPage() {
@@ -104,13 +113,15 @@ export default function ClassesPage() {
   const resource = useResource(loader);
 
   const optionsLoader = useCallback(async () => {
-    const [courses, professors] = await Promise.all([
+    const [courses, professors, departments] = await Promise.all([
       api.get<unknown>("/courses"),
-      api.get<unknown>("/admin/users", { query: { role: "professor", page_size: 100 } }),
+      api.get<unknown>("/admin/professors", { query: { page_size: 100 } }),
+      api.get<unknown>("/departments", { query: { page_size: 100 } }),
     ]);
     return {
       courses: normalizePaginated(courses, normalizeCourse).items,
-      professors: normalizePaginated(professors, normalizeUser).items,
+      professors: normalizePaginated(professors, normalizeProfessorOption).items,
+      departments: normalizePaginated(departments, normalizeDepartment).items,
     };
   }, []);
   const options = useResource(optionsLoader);
@@ -118,11 +129,11 @@ export default function ClassesPage() {
   const studentOptionsLoader = useCallback(
     () =>
       api
-        .get<unknown>("/admin/users", { query: { role: "student", page_size: 100 } })
-        .then((payload) => normalizePaginated(payload, normalizeUser).items),
+        .get<unknown>("/admin/students", { query: { page_size: 100 } })
+        .then((payload) => normalizePaginated(payload, normalizeStudentOption).items),
     [],
   );
-  const studentOptions = useResource<User[]>(studentOptionsLoader, Boolean(enrollmentClass));
+  const studentOptions = useResource<StudentOption[]>(studentOptionsLoader, Boolean(enrollmentClass));
 
   const rosterLoader = useCallback(
     () =>
@@ -148,8 +159,10 @@ export default function ClassesPage() {
       section: item.section ?? "",
       course_id: item.course_id ?? "",
       professor_id: item.professor_id ?? "",
+      department_id: item.department_id ?? "",
       term: item.term ?? "",
       capacity: item.capacity ? String(item.capacity) : "",
+      is_active: item.is_active ?? true,
     });
     setFormError(null);
     setFieldErrors({});
@@ -174,8 +187,10 @@ export default function ClassesPage() {
         section: form.section.trim(),
         course_id: form.course_id,
         professor_id: form.professor_id || null,
+        department_id: form.department_id || null,
         term: form.term.trim(),
         capacity: form.capacity ? Number(form.capacity) : undefined,
+        is_active: form.is_active,
       };
       if (editing) {
         await api.patch(`/admin/classes/${editing.id}`, payload);
@@ -425,8 +440,28 @@ export default function ClassesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Unassigned</SelectItem>
-                  {(options.data?.professors ?? []).map((professor: User) => (
-                    <SelectItem key={professor.id} value={professor.id}>{professor.full_name}</SelectItem>
+                  {(options.data?.professors ?? []).map((professor: ProfessorOption) => (
+                    <SelectItem key={professor.id} value={professor.id}>
+                      {professor.full_name} · {professor.employee_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Department" htmlFor="class-department">
+              <Select
+                value={form.department_id || "none"}
+                onValueChange={(value) =>
+                  setForm((current) => ({ ...current, department_id: value === "none" ? "" : value }))
+                }
+              >
+                <SelectTrigger id="class-department">
+                  <SelectValue placeholder="No department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No department</SelectItem>
+                  {(options.data?.departments ?? []).map((department: Department) => (
+                    <SelectItem key={department.id} value={department.id}>{department.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -448,6 +483,17 @@ export default function ClassesPage() {
                 placeholder="Fall 2026"
               />
             </FormField>
+            <div className="flex items-center justify-between rounded-md border border-border p-3 sm:col-span-2">
+              <div>
+                <p className="text-sm font-medium">Active class section</p>
+                <p className="text-xs text-muted-foreground">Inactive sections are hidden from student options.</p>
+              </div>
+              <Switch
+                checked={form.is_active}
+                onCheckedChange={(checked) => setForm((current) => ({ ...current, is_active: checked }))}
+                aria-label="Active class section"
+              />
+            </div>
             {formError ? (
               <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
@@ -478,7 +524,7 @@ export default function ClassesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Select a student</SelectItem>
-                {(studentOptions.data ?? []).map((student: User) => (
+                {(studentOptions.data ?? []).map((student: StudentOption) => (
                   <SelectItem key={student.id} value={student.id}>
                     {student.full_name} · {student.university_id || student.email}
                   </SelectItem>

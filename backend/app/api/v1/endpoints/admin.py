@@ -25,9 +25,11 @@ from app.models import (
     Department,
     Enrollment,
     Professor,
+    RefreshToken,
     Schedule,
     Student,
     User,
+    course_professors,
 )
 from app.schemas.admin import (
     AuditLogOut,
@@ -36,6 +38,7 @@ from app.schemas.admin import (
     ClassUpdate,
     CourseCreate,
     CourseOut,
+    CourseProfessorOut,
     CourseUpdate,
     DashboardOut,
     DepartmentCreate,
@@ -43,9 +46,12 @@ from app.schemas.admin import (
     DepartmentUpdate,
     EnrollmentCreate,
     EnrollmentOut,
+    PasswordResetIn,
+    ProfessorOptionOut,
     ScheduleCreate,
     ScheduleOut,
     ScheduleUpdate,
+    StudentOptionOut,
     UserAdminOut,
     UserCreate,
     UserUpdate,
@@ -87,6 +93,13 @@ def _apply(entity: Any, payload: Any) -> dict[str, Any]:
     return before
 
 
+def _department_name(db: Session, department_id: str | None) -> str | None:
+    if not department_id:
+        return None
+    department = db.get(Department, department_id)
+    return department.name if department else None
+
+
 def _user_out(db: Session, user: User) -> UserAdminOut:
     student = db.scalar(select(Student).where(Student.user_id == user.id))
     professor = db.scalar(select(Professor).where(Professor.user_id == user.id))
@@ -100,8 +113,68 @@ def _user_out(db: Session, user: User) -> UserAdminOut:
         phone=user.phone,
         created_at=user.created_at,
         department_id=profile.department_id if profile else None,
+        department_name=_department_name(db, profile.department_id if profile else None),
         university_id=student.university_id if student else None,
         employee_id=professor.employee_id if professor else None,
+        program=student.program if student else None,
+        year_level=student.year_level if student else None,
+        title=professor.title if professor else None,
+        office=professor.office if professor else None,
+    )
+
+
+def _course_out(db: Session, course: Course) -> CourseOut:
+    return CourseOut(
+        id=course.id,
+        code=course.code,
+        name=course.name,
+        credits=course.credits,
+        department_id=course.department_id,
+        department_name=_department_name(db, course.department_id),
+        description=course.description,
+        created_at=course.created_at,
+    )
+
+
+def _professor_option_out(db: Session, professor: Professor) -> ProfessorOptionOut:
+    return ProfessorOptionOut(
+        id=professor.id,
+        user_id=professor.user_id,
+        email=professor.user.email,
+        full_name=professor.user.full_name,
+        employee_id=professor.employee_id,
+        department_id=professor.department_id,
+        department_name=_department_name(db, professor.department_id),
+        title=professor.title,
+        is_active=professor.user.is_active,
+    )
+
+
+def _student_option_out(db: Session, student: Student) -> StudentOptionOut:
+    return StudentOptionOut(
+        id=student.id,
+        user_id=student.user_id,
+        email=student.user.email,
+        full_name=student.user.full_name,
+        university_id=student.university_id,
+        department_id=student.department_id,
+        department_name=_department_name(db, student.department_id),
+        program=student.program,
+        year_level=student.year_level,
+        is_active=student.user.is_active,
+    )
+
+
+def _course_professor_out(db: Session, course_id: str, professor: Professor, assigned_at: datetime) -> CourseProfessorOut:
+    return CourseProfessorOut(
+        id=f"{course_id}:{professor.id}",
+        course_id=course_id,
+        professor_id=professor.id,
+        full_name=professor.user.full_name,
+        email=professor.user.email,
+        employee_id=professor.employee_id,
+        department_name=_department_name(db, professor.department_id),
+        assigned_at=assigned_at,
     )
 
 
@@ -372,17 +445,40 @@ def update_user(
         if password is not None:
             before["hashed_password"] = "<redacted>"
             updates["hashed_password"] = hash_password(password)
+
+    profile_fields = {
+        "department_id",
+        "university_id",
+        "employee_id",
+        "program",
+        "year_level",
+        "title",
+        "office",
+    }
+    profile_updates = {key: updates.pop(key) for key in list(updates) if key in profile_fields}
     for key, value in updates.items():
-        if value is None and key not in {"email", "full_name", "phone", "is_active", "department_id", "hashed_password"}:
+        if value is None and key not in {"email", "full_name", "phone", "is_active", "hashed_password"}:
             continue
         before.setdefault(key, getattr(user, key, None))
         setattr(user, key, value)
-    if "department_id" in updates:
-        student = db.scalar(select(Student).where(Student.user_id == user.id))
-        professor = db.scalar(select(Professor).where(Professor.user_id == user.id))
-        profile = student or professor
-        if profile:
-            profile.department_id = updates["department_id"]
+
+    student = db.scalar(select(Student).where(Student.user_id == user.id))
+    professor = db.scalar(select(Professor).where(Professor.user_id == user.id))
+    profile = student or professor
+    if profile_updates and profile is None:
+        raise AppError(422, "validation_error", "Profile fields require a student or professor account")
+    if profile_updates.get("department_id"):
+        _get_or_404(db, Department, profile_updates["department_id"], "Department")
+    if profile_updates.get("university_id") and student:
+        _check_unique(db, Student, Student.university_id, profile_updates["university_id"], "University ID", student.id)
+    if profile_updates.get("employee_id") and professor:
+        _check_unique(db, Professor, Professor.employee_id, profile_updates["employee_id"], "Employee ID", professor.id)
+    for key, value in profile_updates.items():
+        if value is None and key not in {"department_id", "university_id", "employee_id", "program", "year_level", "title", "office"}:
+            continue
+        before.setdefault(f"profile.{key}", getattr(profile, key, None))
+        setattr(profile, key, value)
+
     user.updated_at = utcnow()
     write_audit_log(
         db,
@@ -419,6 +515,113 @@ def delete_user(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/users/{user_id}/reset-password", response_model=UserAdminOut)
+def reset_user_password(
+    user_id: str,
+    payload: PasswordResetIn,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> UserAdminOut:
+    user = _get_or_404(db, User, user_id, "User")
+    if user.role == "admin":
+        raise AppError(409, "conflict", "Admin passwords cannot be reset from user management")
+    user.hashed_password = hash_password(payload.password)
+    user.updated_at = utcnow()
+    revoked_at = utcnow()
+    revoked = db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
+    ).update({"revoked_at": revoked_at}, synchronize_session=False)
+    write_audit_log(
+        db,
+        action="user.password_reset",
+        entity_type="user",
+        entity_id=user.id,
+        actor=actor,
+        before={"hashed_password": "<redacted>"},
+        after={"revoked_sessions": revoked},
+        request=request,
+    )
+    db.commit()
+    return _user_out(db, user)
+
+
+@router.get("/professors", response_model=Page[ProfessorOptionOut])
+def list_professors(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=100),
+    sort_by: Literal["full_name", "email", "employee_id", "created_at"] = "full_name",
+    sort_order: Literal["asc", "desc"] = "asc",
+) -> Page[ProfessorOptionOut]:
+    params = pagination(page, page_size, sort_by, sort_order)
+    query = select(Professor).join(User, User.id == Professor.user_id)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                User.full_name.ilike(pattern),
+                User.email.ilike(pattern),
+                Professor.employee_id.ilike(pattern),
+            )
+        )
+    sort_column: Any
+    if sort_by == "created_at":
+        sort_column = Professor.created_at
+    elif sort_by == "employee_id":
+        sort_column = Professor.employee_id
+    else:
+        sort_column = getattr(User, sort_by)
+    query = apply_sort(query, sort_column, params)
+    result = paginate(db, query, params)
+    return Page[ProfessorOptionOut](
+        items=[_professor_option_out(db, professor) for professor in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
+@router.get("/students", response_model=Page[StudentOptionOut])
+def list_students(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=100),
+    sort_by: Literal["full_name", "email", "university_id", "created_at"] = "full_name",
+    sort_order: Literal["asc", "desc"] = "asc",
+) -> Page[StudentOptionOut]:
+    params = pagination(page, page_size, sort_by, sort_order)
+    query = select(Student).join(User, User.id == Student.user_id)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                User.full_name.ilike(pattern),
+                User.email.ilike(pattern),
+                Student.university_id.ilike(pattern),
+            )
+        )
+    sort_column: Any
+    if sort_by == "created_at":
+        sort_column = Student.created_at
+    elif sort_by == "university_id":
+        sort_column = Student.university_id
+    else:
+        sort_column = getattr(User, sort_by)
+    query = apply_sort(query, sort_column, params)
+    result = paginate(db, query, params)
+    return Page[StudentOptionOut](
+        items=[_student_option_out(db, student) for student in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
 @router.get("/courses", response_model=Page[CourseOut])
 def list_courses(
     db: DB_Dependency,
@@ -437,13 +640,20 @@ def list_courses(
         pattern = f"%{search}%"
         query = query.where(or_(Course.code.ilike(pattern), Course.name.ilike(pattern)))
     query = apply_sort(query, getattr(Course, sort_by), params)
-    return paginate(db, query, params)
+    result = paginate(db, query, params)
+    return Page[CourseOut](
+        items=[_course_out(db, course) for course in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
 
 
 @router.post("/courses", response_model=CourseOut, status_code=status.HTTP_201_CREATED)
 def create_course(
     payload: CourseCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
-) -> Course:
+) -> CourseOut:
     _check_unique(db, Course, Course.code, payload.code, "Course code")
     _get_or_404(db, Department, payload.department_id, "Department")
     course = Course(
@@ -469,12 +679,12 @@ def create_course(
     )
     db.commit()
     db.refresh(course)
-    return course
+    return _course_out(db, course)
 
 
 @router.get("/courses/{course_id}", response_model=CourseOut)
-def get_course(course_id: str, db: DB_Dependency) -> Course:
-    return _get_or_404(db, Course, course_id, "Course")
+def get_course(course_id: str, db: DB_Dependency) -> CourseOut:
+    return _course_out(db, _get_or_404(db, Course, course_id, "Course"))
 
 
 @router.patch("/courses/{course_id}", response_model=CourseOut)
@@ -484,7 +694,7 @@ def update_course(
     request: Request,
     db: DB_Dependency,
     actor: User = Depends(require_admin),
-) -> Course:
+) -> CourseOut:
     course = _get_or_404(db, Course, course_id, "Course")
     if payload.code:
         _check_unique(db, Course, Course.code, payload.code, "Course code", course_id)
@@ -503,7 +713,7 @@ def update_course(
         request=request,
     )
     db.commit()
-    return course
+    return _course_out(db, course)
 
 
 @router.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -521,6 +731,100 @@ def delete_course(
         request=request,
     )
     db.delete(course)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/courses/{course_id}/professors", response_model=list[CourseProfessorOut])
+def list_course_professors(course_id: str, db: DB_Dependency) -> list[CourseProfessorOut]:
+    _get_or_404(db, Course, course_id, "Course")
+    rows = db.execute(
+        select(course_professors)
+        .where(course_professors.c.course_id == course_id)
+        .order_by(course_professors.c.created_at)
+    ).mappings().all()
+    result: list[CourseProfessorOut] = []
+    for row in rows:
+        professor = db.get(Professor, row["professor_id"])
+        if professor:
+            result.append(_course_professor_out(db, course_id, professor, row["created_at"]))
+    return result
+
+
+@router.post(
+    "/courses/{course_id}/professors/{professor_id}",
+    response_model=CourseProfessorOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def assign_professor_to_course(
+    course_id: str,
+    professor_id: str,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> CourseProfessorOut:
+    _get_or_404(db, Course, course_id, "Course")
+    professor = _get_or_404(db, Professor, professor_id, "Professor")
+    existing = db.execute(
+        select(course_professors).where(
+            course_professors.c.course_id == course_id,
+            course_professors.c.professor_id == professor_id,
+        )
+    ).first()
+    if existing:
+        raise AppError(409, "conflict", "Professor is already assigned to this course")
+    assigned_at = utcnow()
+    db.execute(
+        course_professors.insert().values(
+            course_id=course_id, professor_id=professor_id, created_at=assigned_at
+        )
+    )
+    write_audit_log(
+        db,
+        action="course_professor.assign",
+        entity_type="course_professor",
+        entity_id=f"{course_id}:{professor_id}",
+        actor=actor,
+        after={"course_id": course_id, "professor_id": professor_id},
+        request=request,
+    )
+    db.commit()
+    return _course_professor_out(db, course_id, professor, assigned_at)
+
+
+@router.delete(
+    "/courses/{course_id}/professors/{professor_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def unassign_professor_from_course(
+    course_id: str,
+    professor_id: str,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> Response:
+    row = db.execute(
+        select(course_professors).where(
+            course_professors.c.course_id == course_id,
+            course_professors.c.professor_id == professor_id,
+        )
+    ).first()
+    if row is None:
+        raise AppError(404, "not_found", "Course professor assignment not found")
+    db.execute(
+        course_professors.delete().where(
+            course_professors.c.course_id == course_id,
+            course_professors.c.professor_id == professor_id,
+        )
+    )
+    write_audit_log(
+        db,
+        action="course_professor.unassign",
+        entity_type="course_professor",
+        entity_id=f"{course_id}:{professor_id}",
+        actor=actor,
+        before={"course_id": course_id, "professor_id": professor_id},
+        request=request,
+    )
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

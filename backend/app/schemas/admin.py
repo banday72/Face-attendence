@@ -70,6 +70,12 @@ class UserUpdate(StrictModel):
     is_active: bool | None = None
     password: str | None = None
     department_id: str | None = None
+    university_id: str | None = Field(default=None, max_length=50)
+    employee_id: str | None = Field(default=None, max_length=50)
+    program: str | None = Field(default=None, max_length=120)
+    year_level: int | None = Field(default=None, ge=1, le=8)
+    title: str | None = Field(default=None, max_length=50)
+    office: str | None = Field(default=None, max_length=80)
 
     @field_validator("password")
     @classmethod
@@ -79,10 +85,24 @@ class UserUpdate(StrictModel):
         return validate_password(value)
 
 
+class PasswordResetIn(StrictModel):
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: str) -> str:
+        return validate_password(value)
+
+
 class UserAdminOut(UserOut):
     department_id: str | None = None
+    department_name: str | None = None
     university_id: str | None = None
     employee_id: str | None = None
+    program: str | None = None
+    year_level: int | None = None
+    title: str | None = None
+    office: str | None = None
 
 
 class CourseCreate(StrictModel):
@@ -107,6 +127,7 @@ class CourseOut(ORMModel):
     name: str
     credits: int
     department_id: str
+    department_name: str | None = None
     description: str | None
     created_at: datetime
 
@@ -164,6 +185,42 @@ class EnrollmentOut(ORMModel):
 
 class EnrollmentCreate(StrictModel):
     student_id: str
+
+
+class ProfessorOptionOut(ORMModel):
+    id: str
+    user_id: str
+    email: str
+    full_name: str
+    employee_id: str
+    department_id: str | None = None
+    department_name: str | None = None
+    title: str | None = None
+    is_active: bool
+
+
+class StudentOptionOut(ORMModel):
+    id: str
+    user_id: str
+    email: str
+    full_name: str
+    university_id: str
+    department_id: str | None = None
+    department_name: str | None = None
+    program: str | None = None
+    year_level: int | None = None
+    is_active: bool
+
+
+class CourseProfessorOut(ORMModel):
+    id: str
+    course_id: str
+    professor_id: str
+    full_name: str
+    email: str
+    employee_id: str
+    department_name: str | None = None
+    assigned_at: datetime
 
 
 class ScheduleCreate(StrictModel):

@@ -6,9 +6,11 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.course_professor import course_professors
 
 if TYPE_CHECKING:
     from app.models.class_ import Class_
+    from app.models.course import Course
     from app.models.department import Department
     from app.models.user import User
 
@@ -27,3 +29,4 @@ class Professor(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     user: Mapped[User] = relationship(back_populates="professor")
     department: Mapped[Department | None] = relationship(back_populates="professors")
     classes: Mapped[list[Class_]] = relationship(back_populates="professor")
+    courses: Mapped[list[Course]] = relationship(secondary=course_professors, back_populates="professors")

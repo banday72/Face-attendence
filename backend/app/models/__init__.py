@@ -5,6 +5,7 @@ from app.models.biometric_consent import BiometricConsent
 from app.models.class_ import Class_
 from app.models.classroom import Classroom
 from app.models.course import Course
+from app.models.course_professor import course_professors
 from app.models.department import Department
 from app.models.enrollment import Enrollment
 from app.models.face_embedding import FaceEmbedding
@@ -32,4 +33,5 @@ __all__ = [
     "Schedule",
     "Student",
     "User",
+    "course_professors",
 ]

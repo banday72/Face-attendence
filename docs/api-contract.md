@@ -37,19 +37,25 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 | GET | `/admin/dashboard` | System-wide counts and attendance statistics |
 | GET, POST | `/admin/departments` | List/create departments |
 | GET, PATCH, DELETE | `/admin/departments/{id}` | Manage department |
-| GET, POST | `/admin/users` | List/create users of any role |
-| GET, PATCH, DELETE | `/admin/users/{id}` | Manage user account |
-| GET, POST | `/admin/courses` | List/create courses |
+| GET, POST | `/admin/users` | List/create users of any role; professor/student create requires role-specific IDs |
+| GET, PATCH, DELETE | `/admin/users/{id}` | Manage user account, including role-specific profile fields |
+| POST | `/admin/users/{id}/reset-password` | Reset a professor/student password and revoke active refresh sessions |
+| GET | `/admin/professors` | Professor options keyed by professor profile ID |
+| GET | `/admin/students` | Student options keyed by student profile ID |
+| GET, POST | `/admin/courses` | List/create courses; `department_id` is required |
 | GET, PATCH, DELETE | `/admin/courses/{id}` | Manage course |
-| GET, POST | `/admin/classes` | List/create classes |
-| GET, PATCH, DELETE | `/admin/classes/{id}` | Manage class |
-| POST | `/admin/classes/{id}/enrollments` | Enroll a student |
+| GET, POST, DELETE | `/admin/courses/{id}/professors` | List/assign/unassign professors for a course |
+| GET, POST | `/admin/classes` | List/create class sections; `professor_id` is a professor profile ID |
+| GET, PATCH, DELETE | `/admin/classes/{id}` | Manage class section |
+| POST | `/admin/classes/{id}/enrollments` | Enroll a student; `student_id` is a student profile ID |
 | DELETE | `/admin/classes/{id}/enrollments/{student_id}` | Unenroll a student |
 | GET, POST | `/admin/schedules` | List/create weekly timetable entries |
 | GET, PATCH, DELETE | `/admin/schedules/{id}` | Manage weekly timetable entry |
 | GET | `/admin/face/status/{student_id}` | Registration status for a selected student |
 | POST | `/admin/face/register/{student_id}` | Register a student's face with explicit admin-recorded consent |
 | GET | `/admin/audit-logs` | Query modification history |
+
+Professor and student option endpoints return profile IDs, not user account IDs; use those IDs for course assignments, class sections, and enrollments. Course-professor assignments are catalog metadata; attendance permissions remain scoped by the professor assigned to a class section.
 
 Weekly timetable entries use `day_of_week` `0=Monday` through `6=Sunday`, plus `start_time`, `end_time`, and an optional `classroom_id`; the pair `(class_id, day_of_week, start_time)` is unique. `end_time` must be later than `start_time`. Student-facing timetable data is read-only.
 

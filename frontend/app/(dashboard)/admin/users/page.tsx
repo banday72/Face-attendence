@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RefreshCw, Search } from "lucide-react";
+import { KeyRound, Plus, RefreshCw, Search } from "lucide-react";
 import { useCallback, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -17,9 +17,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import {
@@ -47,22 +52,36 @@ import { initials } from "@/lib/utils";
 interface UserForm {
   full_name: string;
   email: string;
+  phone: string;
   university_id: string;
+  employee_id: string;
   role: Role;
   department_id: string;
   password: string;
   is_active: boolean;
+  program: string;
+  year_level: string;
+  title: string;
+  office: string;
 }
 
-const emptyForm: UserForm = {
-  full_name: "",
-  email: "",
-  university_id: "",
-  role: "student",
-  department_id: "",
-  password: "",
-  is_active: true,
-};
+function emptyForm(role: Role = "student"): UserForm {
+  return {
+    full_name: "",
+    email: "",
+    phone: "",
+    university_id: "",
+    employee_id: "",
+    role,
+    department_id: "",
+    password: "",
+    is_active: true,
+    program: "",
+    year_level: "",
+    title: "",
+    office: "",
+  };
+}
 
 const roleVariant: Record<Role, "purple" | "info" | "warning"> = {
   student: "purple",
@@ -77,12 +96,16 @@ export default function UsersPage() {
   const debouncedSearch = useDebouncedValue(search);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
-  const [form, setForm] = useState<UserForm>(emptyForm);
+  const [form, setForm] = useState<UserForm>(emptyForm());
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [resetting, setResetting] = useState<User | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const loader = useCallback(
     () =>
@@ -103,9 +126,9 @@ export default function UsersPage() {
   );
   const departments = useResource<Department[]>(departmentsLoader);
 
-  const openCreate = () => {
+  const openCreate = (role: Role = "student") => {
     setEditing(null);
-    setForm(emptyForm);
+    setForm(emptyForm(role));
     setFormError(null);
     setFieldErrors({});
     setDialogOpen(true);
@@ -116,11 +139,17 @@ export default function UsersPage() {
     setForm({
       full_name: user.full_name,
       email: user.email,
+      phone: user.phone ?? "",
       university_id: user.university_id ?? "",
+      employee_id: user.employee_id ?? "",
       role: user.role,
       department_id: user.department_id ?? "",
       password: "",
       is_active: user.is_active,
+      program: user.program ?? "",
+      year_level: user.year_level ? String(user.year_level) : "",
+      title: user.title ?? "",
+      office: user.office ?? "",
     });
     setFormError(null);
     setFieldErrors({});
@@ -132,7 +161,15 @@ export default function UsersPage() {
     const nextErrors: Record<string, string> = {};
     if (!form.full_name.trim()) nextErrors.full_name = "Full name is required.";
     if (!/^\S+@\S+\.\S+$/.test(form.email)) nextErrors.email = "Enter a valid email.";
-    if (!editing && form.password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    if (!editing) {
+      if (form.password.length < 8) nextErrors.password = "Use at least 8 characters.";
+      if (form.role === "student" && !form.university_id.trim()) {
+        nextErrors.university_id = "University ID is required for students.";
+      }
+      if (form.role === "professor" && !form.employee_id.trim()) {
+        nextErrors.employee_id = "Employee ID is required for professors.";
+      }
+    }
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -142,19 +179,32 @@ export default function UsersPage() {
       const payload: Record<string, unknown> = {
         full_name: form.full_name.trim(),
         email: form.email.trim().toLowerCase(),
-        role: form.role,
         department_id: form.department_id || null,
-        is_active: form.is_active,
+        phone: form.phone.trim() || null,
       };
-      if (form.university_id.trim()) payload.university_id = form.university_id.trim();
-      if (form.password) payload.password = form.password;
+      if (editing) {
+        payload.is_active = form.is_active;
+      } else {
+        payload.role = form.role;
+        payload.password = form.password;
+      }
+      if (form.role === "student") {
+        if (form.university_id.trim()) payload.university_id = form.university_id.trim();
+        if (form.program.trim()) payload.program = form.program.trim();
+        if (form.year_level) payload.year_level = Number(form.year_level);
+      }
+      if (form.role === "professor") {
+        if (form.employee_id.trim()) payload.employee_id = form.employee_id.trim();
+        if (form.title.trim()) payload.title = form.title.trim();
+        if (form.office.trim()) payload.office = form.office.trim();
+      }
 
       if (editing) {
         await api.patch(`/admin/users/${editing.id}`, payload);
         toast.success("User updated");
       } else {
         await api.post("/admin/users", payload);
-        toast.success("User created");
+        toast.success(form.role === "professor" ? "Professor account created" : "Student account created");
       }
       setDialogOpen(false);
       resource.reload();
@@ -181,19 +231,44 @@ export default function UsersPage() {
     }
   };
 
+  const handleReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!resetting) return;
+    if (resetPassword.length < 8) {
+      setResetError("Use at least 8 characters.");
+      return;
+    }
+    setResetLoading(true);
+    setResetError(null);
+    try {
+      await api.post(`/admin/users/${resetting.id}/reset-password`, { password: resetPassword });
+      toast.success("Password reset and sessions revoked");
+      setResetting(null);
+      setResetPassword("");
+      resource.reload();
+    } catch (error) {
+      setResetError(errorMessage(error));
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Management"
         title="Users"
-        description="Manage administrators, professors, and students from one place."
+        description="Create students and professors, manage profiles, and reset passwords."
         actions={
           <>
             <Button variant="outline" onClick={resource.reload}>
               <RefreshCw /> Refresh
             </Button>
-            <Button onClick={openCreate}>
-              <Plus /> Add user
+            <Button variant="outline" onClick={() => openCreate("professor")}>
+              <Plus /> Add professor
+            </Button>
+            <Button onClick={() => openCreate("student")}>
+              <Plus /> Add student
             </Button>
           </>
         }
@@ -242,7 +317,7 @@ export default function UsersPage() {
           onRetry={resource.reload}
           skeleton={<TableSkeleton columns={7} />}
           emptyTitle="No users found"
-          emptyDescription="Add a user or adjust your filters."
+          emptyDescription="Add a student or professor to get started."
         >
           {(data) =>
             data.items.length === 0 ? (
@@ -253,7 +328,7 @@ export default function UsersPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>User</TableHead>
-                      <TableHead>University ID</TableHead>
+                      <TableHead>ID</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Department</TableHead>
                       <TableHead>Status</TableHead>
@@ -275,7 +350,9 @@ export default function UsersPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{user.university_id || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {user.university_id || user.employee_id || "—"}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={roleVariant[user.role]} className="capitalize">{user.role}</Badge>
                         </TableCell>
@@ -293,6 +370,22 @@ export default function UsersPage() {
                             onEdit={() => openEdit(user)}
                             onDelete={() => setDeleting(user)}
                             label={`Actions for ${user.full_name}`}
+                            extra={
+                              user.role === "admin" ? null : (
+                                <>
+                                  <DropdownMenuItem
+                                    onSelect={() => {
+                                      setResetting(user);
+                                      setResetPassword("");
+                                      setResetError(null);
+                                    }}
+                                  >
+                                    <KeyRound /> Reset password
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )
+                            }
                           />
                         </TableCell>
                       </TableRow>
@@ -315,12 +408,29 @@ export default function UsersPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit user" : "Add a new user"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Edit user" : form.role === "professor" ? "Add professor" : "Add student"}
+            </DialogTitle>
             <DialogDescription>
-              Roles control what each account can see and change.
+              Student and professor profiles are created with their accounts. Passwords can be reset later from the row menu.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2" noValidate>
+            <FormField label="Role" htmlFor="user-role" required error={fieldErrors.role}>
+              <Select
+                value={form.role}
+                disabled={Boolean(editing)}
+                onValueChange={(value) => setForm((current) => ({ ...current, role: value as Role }))}
+              >
+                <SelectTrigger id="user-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="professor">Professor</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
             <FormField label="Full name" htmlFor="user-name" required error={fieldErrors.full_name}>
               <Input
                 id="user-name"
@@ -336,28 +446,67 @@ export default function UsersPage() {
                 onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
               />
             </FormField>
-            <FormField label="University ID" htmlFor="user-uid" error={fieldErrors.university_id}>
+            <FormField label="Phone" htmlFor="user-phone" error={fieldErrors.phone}>
               <Input
-                id="user-uid"
-                value={form.university_id}
-                onChange={(event) => setForm((current) => ({ ...current, university_id: event.target.value }))}
+                id="user-phone"
+                value={form.phone}
+                onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
               />
             </FormField>
-            <FormField label="Role" htmlFor="user-role" required error={fieldErrors.role}>
-              <Select
-                value={form.role}
-                onValueChange={(value) => setForm((current) => ({ ...current, role: value as Role }))}
-              >
-                <SelectTrigger id="user-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="professor">Professor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
+            {form.role === "student" ? (
+              <>
+                <FormField label="University ID" htmlFor="user-uid" required={!editing} error={fieldErrors.university_id}>
+                  <Input
+                    id="user-uid"
+                    value={form.university_id}
+                    onChange={(event) => setForm((current) => ({ ...current, university_id: event.target.value }))}
+                  />
+                </FormField>
+                <FormField label="Program" htmlFor="user-program" error={fieldErrors.program}>
+                  <Input
+                    id="user-program"
+                    value={form.program}
+                    onChange={(event) => setForm((current) => ({ ...current, program: event.target.value }))}
+                    placeholder="e.g. Computer Science"
+                  />
+                </FormField>
+                <FormField label="Year level" htmlFor="user-year" error={fieldErrors.year_level}>
+                  <Input
+                    id="user-year"
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={form.year_level}
+                    onChange={(event) => setForm((current) => ({ ...current, year_level: event.target.value }))}
+                  />
+                </FormField>
+              </>
+            ) : (
+              <>
+                <FormField label="Employee ID" htmlFor="user-eid" required={!editing} error={fieldErrors.employee_id}>
+                  <Input
+                    id="user-eid"
+                    value={form.employee_id}
+                    onChange={(event) => setForm((current) => ({ ...current, employee_id: event.target.value }))}
+                  />
+                </FormField>
+                <FormField label="Title" htmlFor="user-title" error={fieldErrors.title}>
+                  <Input
+                    id="user-title"
+                    value={form.title}
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    placeholder="e.g. Dr."
+                  />
+                </FormField>
+                <FormField label="Office" htmlFor="user-office" error={fieldErrors.office}>
+                  <Input
+                    id="user-office"
+                    value={form.office}
+                    onChange={(event) => setForm((current) => ({ ...current, office: event.target.value }))}
+                  />
+                </FormField>
+              </>
+            )}
             <FormField label="Department" htmlFor="user-department">
               <Select
                 value={form.department_id || "none"}
@@ -376,44 +525,81 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField
-              label={editing ? "New password (optional)" : "Password"}
-              htmlFor="user-password"
-              required={!editing}
-              error={fieldErrors.password}
-            >
-              <Input
-                id="user-password"
-                type="password"
-                value={form.password}
-                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                placeholder={editing ? "Leave blank to keep current" : "At least 8 characters"}
-              />
-            </FormField>
-            <div className="flex items-center justify-between rounded-md border border-border p-3 sm:col-span-2">
-              <div>
-                <p className="text-sm font-medium">Active account</p>
-                <p className="text-xs text-muted-foreground">Inactive users cannot sign in.</p>
+            {editing ? (
+              <div className="flex items-center justify-between rounded-md border border-border p-3 sm:col-span-2">
+                <div>
+                  <p className="text-sm font-medium">Active account</p>
+                  <p className="text-xs text-muted-foreground">Inactive users cannot sign in.</p>
+                </div>
+                <Switch
+                  checked={form.is_active}
+                  onCheckedChange={(checked) => setForm((current) => ({ ...current, is_active: checked }))}
+                  aria-label="Active account"
+                />
               </div>
-              <Switch
-                checked={form.is_active}
-                onCheckedChange={(checked) => setForm((current) => ({ ...current, is_active: checked }))}
-                aria-label="Active account"
-              />
-            </div>
+            ) : (
+              <FormField label="Password" htmlFor="user-password" required error={fieldErrors.password}>
+                <Input
+                  id="user-password"
+                  type="password"
+                  value={form.password}
+                  onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                  placeholder="At least 8 characters"
+                />
+              </FormField>
+            )}
             {formError ? (
               <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                 {formError}
               </p>
             ) : null}
-            <div className="flex justify-end gap-2 sm:col-span-2">
+            <DialogFooter className="sm:col-span-2">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" loading={saving}>
-                {editing ? "Save changes" : "Create user"}
+                {editing ? "Save changes" : "Create account"}
               </Button>
-            </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(resetting)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResetting(null);
+            setResetPassword("");
+            setResetError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {resetting?.full_name ?? "this user"}. Their active sessions will be revoked.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleReset} className="grid gap-4">
+            <FormField label="New password" htmlFor="reset-password" required error={resetError ?? undefined}>
+              <Input
+                id="reset-password"
+                type="password"
+                value={resetPassword}
+                onChange={(event) => setResetPassword(event.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </FormField>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setResetting(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={resetLoading}>
+                Reset password
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

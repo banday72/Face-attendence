@@ -27,12 +27,53 @@ export interface User {
   full_name: string;
   email: string;
   university_id?: string;
+  employee_id?: string;
+  program?: string;
+  year_level?: number;
+  title?: string;
+  office?: string;
   role: Role;
   department_id?: string;
   department_name?: string;
   phone?: string;
   is_active: boolean;
   created_at?: string;
+}
+
+export interface ProfessorOption {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  employee_id: string;
+  department_id?: string;
+  department_name?: string;
+  title?: string;
+  is_active: boolean;
+}
+
+export interface StudentOption {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  university_id: string;
+  department_id?: string;
+  department_name?: string;
+  program?: string;
+  year_level?: number;
+  is_active: boolean;
+}
+
+export interface CourseProfessor {
+  id: string;
+  course_id: string;
+  professor_id: string;
+  full_name: string;
+  email: string;
+  employee_id: string;
+  department_name?: string;
+  assigned_at: string;
 }
 
 export interface Department {
@@ -81,6 +122,7 @@ export interface ClassItem {
   academic_year?: string;
   capacity?: number;
   enrolled_count?: number;
+  is_active?: boolean;
   schedule_days: string[];
   start_time?: string;
   end_time?: string;
