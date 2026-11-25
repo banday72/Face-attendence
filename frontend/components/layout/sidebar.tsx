@@ -21,9 +21,9 @@ interface SidebarProps {
 }
 
 const roleStyles: Record<Role, string> = {
-  admin: "bg-amber-500/15 text-amber-200 ring-amber-400/20",
-  professor: "bg-blue-500/15 text-blue-200 ring-blue-400/20",
-  student: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/20",
+  admin: "bg-coral/15 text-coral ring-coral/25",
+  professor: "bg-cream/10 text-cream ring-cream/20",
+  student: "bg-cream/10 text-cream ring-cream/20",
 };
 
 const roleIcons: Record<Role, LucideIcon> = {
@@ -39,7 +39,7 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex h-[72px] shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
-        <div className="flex size-10 items-center justify-center rounded-md bg-sidebar-accent text-white">
+        <div className="flex size-10 items-center justify-center rounded-md bg-sidebar-accent text-navy">
           <GraduationCap className="size-5" />
         </div>
         <div>
@@ -63,7 +63,7 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
             <p className="text-sm font-semibold">{roleLabel(role)} portal</p>
             <p className="truncate text-[11px] text-sidebar-muted">Workspace access</p>
           </div>
-          <span className="size-1.5 rounded-full bg-emerald-400" />
+          <span className="size-1.5 rounded-full bg-coral" />
         </Link>
       </div>
 
@@ -88,14 +88,14 @@ export function Sidebar({ role, pathname, onNavigate }: SidebarProps) {
                     className={cn(
                       "group relative flex items-center gap-3 rounded-md border-l-2 px-3 py-2.5 text-sm font-medium transition-colors",
                       active
-                        ? "border-sidebar-accent bg-sidebar-accent/15 text-white"
-                        : "border-transparent text-sidebar-muted hover:bg-sidebar-accent/10 hover:text-white",
+                        ? "border-sidebar-accent bg-sidebar-accent/15 text-cream"
+                        : "border-transparent text-sidebar-muted hover:bg-sidebar-accent/10 hover:text-cream",
                     )}
                   >
                     <Icon
                       className={cn(
                         "size-[18px] shrink-0 transition-colors",
-                        active ? "text-sidebar-accent" : "text-sidebar-muted group-hover:text-white",
+                        active ? "text-sidebar-accent" : "text-sidebar-muted group-hover:text-cream",
                       )}
                     />
                     <span className="truncate">{item.label}</span>

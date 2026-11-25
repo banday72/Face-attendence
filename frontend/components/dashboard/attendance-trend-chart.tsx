@@ -46,28 +46,28 @@ export function AttendanceTrendChart({
               <AreaChart data={data} margin={{ top: 10, right: 8, left: -22, bottom: 0 }}>
                 <defs>
                   <linearGradient id="attendanceFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1d4ed8" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0} />
+                    <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.32} />
+                    <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#94a3b830" />
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="label"
                   tickLine={false}
                   axisLine={false}
                   fontSize={11}
-                  tick={{ fill: "#94a3b8" }}
+                  tick={{ fill: "hsl(var(--muted-foreground))" }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
                   tickLine={false}
                   axisLine={false}
                   fontSize={11}
-                  tick={{ fill: "#94a3b8" }}
+                  tick={{ fill: "hsl(var(--muted-foreground))" }}
                   domain={[0, "auto"]}
                 />
                 <Tooltip
-                  cursor={{ stroke: "#1d4ed855", strokeWidth: 1 }}
+                  cursor={{ stroke: "hsl(var(--coral))", strokeOpacity: 0.35, strokeWidth: 1 }}
                   contentStyle={{
                     borderRadius: 12,
                     border: "1px solid hsl(var(--border))",
@@ -80,10 +80,10 @@ export function AttendanceTrendChart({
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#1d4ed8"
+                  stroke="hsl(var(--chart-1))"
                   strokeWidth={2.5}
                   fill="url(#attendanceFill)"
-                  activeDot={{ r: 5, fill: "#1d4ed8", stroke: "#fff", strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: "hsl(var(--coral))", stroke: "hsl(var(--cream-bright))", strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>

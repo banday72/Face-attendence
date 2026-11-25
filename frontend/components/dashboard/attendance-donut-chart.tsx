@@ -6,7 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EmptyState } from "@/components/ui/empty-state";
 import type { NameValue } from "@/lib/types";
 
-const colors = ["#15803d", "#b45309", "#b91c1c", "#334155", "#1d4ed8"];
+const colors = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+];
 
 interface DonutChartProps {
   data: NameValue[];

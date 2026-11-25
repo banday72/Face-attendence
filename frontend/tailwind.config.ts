@@ -70,6 +70,15 @@ const config: Config = {
           4: "hsl(var(--chart-4))",
           5: "hsl(var(--chart-5))",
         },
+        navy: {
+          DEFAULT: "hsl(var(--navy))",
+          soft: "hsl(var(--navy-soft))",
+        },
+        cream: {
+          DEFAULT: "hsl(var(--cream))",
+          bright: "hsl(var(--cream-bright))",
+        },
+        coral: "hsl(var(--coral))",
       },
       borderRadius: {
         lg: "var(--radius)",

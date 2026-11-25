@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 type Tone = "primary" | "success" | "warning" | "purple" | "sky" | "rose";
 
 const tones: Record<Tone, string> = {
-  primary: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  success: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-  warning: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  purple: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
-  sky: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300",
-  rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  primary: "bg-primary/10 text-primary",
+  success: "bg-navy/10 text-navy dark:bg-cream/10 dark:text-cream",
+  warning: "bg-coral/12 text-coral",
+  purple: "bg-secondary text-secondary-foreground",
+  sky: "bg-muted text-foreground",
+  rose: "bg-coral/10 text-coral",
 };
 
 interface StatCardProps {
@@ -70,8 +70,8 @@ export function StatCard({
             className={cn(
               "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold",
               trend >= 0
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+                ? "bg-primary/10 text-primary"
+                : "bg-coral/12 text-coral",
             )}
           >
             {trend >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}

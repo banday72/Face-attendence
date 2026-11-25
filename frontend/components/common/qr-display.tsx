@@ -6,6 +6,9 @@ import { useEffect, useState } from "react";
 
 import { displayToken } from "@/lib/qr";
 
+const navy = "#0b1f3a";
+const cream = "#f8f3e8";
+
 export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: number }) {
   const [image, setImage] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -24,7 +27,7 @@ export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: nu
     void QRCode.toDataURL(payload, {
       width: size * 2,
       margin: 1,
-      color: { dark: "#0f172aff", light: "#ffffffff" },
+      color: { dark: `${navy}ff`, light: `${cream}ff` },
     })
       .then((url) => {
         if (active) setImage(url);
@@ -62,13 +65,13 @@ export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: nu
   }
 
   return (
-    <div className="rounded-lg border border-border bg-white p-3 shadow-soft" style={{ width: size + 24 }}>
+    <div className="rounded-lg border border-border bg-cream p-3 shadow-soft" style={{ width: size + 24 }}>
       {image ? (
         <img src={image} alt="Session QR code" width={size} height={size} className="rounded-lg" />
       ) : (
         <div className="animate-pulse rounded-lg bg-muted" style={{ width: size, height: size }} />
       )}
-      <p className="mt-2 truncate text-center font-mono text-[10px] text-slate-500">
+      <p className="mt-2 truncate text-center font-mono text-[10px] text-muted-foreground">
         {displayToken(payload)}
       </p>
     </div>

@@ -238,7 +238,7 @@ export default function RegisterPage() {
               <LockKeyhole className="size-3.5" />
               Your credentials are never stored in browser storage.
             </div>
-            <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+            <div className="flex items-center justify-center gap-1.5 text-xs text-primary">
               <CheckCircle2 className="size-3.5" />
               Already registered?{" "}
               <Link href="/login" className="font-semibold hover:underline">

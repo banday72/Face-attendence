@@ -35,27 +35,27 @@ const features = [
 export default function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden bg-[#0f172a] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+      <section className="relative hidden bg-navy p-10 text-cream lg:flex lg:flex-col lg:justify-between xl:p-14">
         <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-md bg-blue-500 text-white">
+          <div className="flex size-11 items-center justify-center rounded-md bg-coral text-navy">
             <GraduationCap className="size-6" />
           </div>
           <div>
             <p className="text-lg font-semibold tracking-tight">Attendly</p>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cream/55">
               University attendance system
             </p>
           </div>
         </div>
 
         <div className="max-w-xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">
             Smart campus operations
           </p>
           <h1 className="mt-6 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">
             Attendance you can rely on.
           </h1>
-          <p className="mt-6 max-w-lg text-base leading-relaxed text-white/65">
+          <p className="mt-6 max-w-lg text-base leading-relaxed text-cream/70">
             One secure workspace for administrators, professors, and students, with
             QR and face verification, live sessions, and clear reporting.
           </p>
@@ -66,14 +66,14 @@ export default function LoginPage() {
               return (
                 <div
                   key={feature.title}
-                  className="flex items-start gap-4 rounded-md border border-white/10 bg-white/[0.03] p-4"
+                  className="flex items-start gap-4 rounded-md border border-cream/15 bg-cream/[0.04] p-4"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-white/10 text-blue-200">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-coral/15 text-coral">
                     <Icon className="size-5" />
                   </span>
                   <div>
                     <p className="text-sm font-semibold">{feature.title}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-white/50">
+                    <p className="mt-0.5 text-xs leading-relaxed text-cream/55">
                       {feature.description}
                     </p>
                   </div>
@@ -83,8 +83,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-white/40">
-          <CheckCircle2 className="size-4 text-emerald-400" />
+        <div className="flex items-center gap-2 text-xs text-cream/50">
+          <CheckCircle2 className="size-4 text-coral" />
           Privacy-conscious · Role-based access · Audit ready
         </div>
       </section>
