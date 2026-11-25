@@ -185,9 +185,9 @@ The main Vercel backend handles all `/api/v1/face/*`, `/api/v1/admin/face/*`, an
 
 1. Install `backend/requirements-face.txt` and download `buffalo_sc.zip` into `$HOME/.insightface/models/buffalo_sc`.
 2. Start the worker: `py -m uvicorn app.face_worker:app --host 127.0.0.1 --port 8010` from `backend`, with `ENVIRONMENT=development ALLOW_DEV_SECRETS=1 FACE_MODEL_NAME=buffalo_sc`.
-3. Start a tunnel: `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8010`.
-4. Set the printed `https://*.trycloudflare.com` URL as Vercel `FACE_SERVICE_URL` and redeploy.
+3. Start a tunnel: `ssh -R 80:127.0.0.1:8010 nokey@localhost.run -- --output json`.
+4. Set the printed `https://*.app.lhr.life` URL as Vercel `FACE_SERVICE_URL` and redeploy.
 
-Quick Tunnel URLs change whenever the tunnel restarts, so update `FACE_SERVICE_URL` after each restart. The PC running the worker must stay online; this is suitable for demos and local development, not production. If using a hosted worker, set `FACE_SERVICE_URL` to its base URL and keep the service warm.
+Free `localhost.run` domains change after a few hours, so update `FACE_SERVICE_URL` and redeploy whenever the URL changes. The PC running the worker must stay online; this is suitable for demos and local development, not production. If using a hosted worker, set `FACE_SERVICE_URL` to its base URL and keep the service warm.
 
 See `docs/architecture.md` for data model and flow details.
