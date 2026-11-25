@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api, errorMessage } from "@/lib/api";
+import { api, errorMessage, faceServiceErrorMessage } from "@/lib/api";
 import { cameraErrorMessage, captureFrame, startCamera, stopCamera } from "@/lib/camera";
 import { FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
 import { useResource } from "@/lib/hooks";
@@ -186,7 +186,7 @@ export default function FaceAttendancePage() {
       releaseCamera();
       toast.success("Face check-in successful");
     } catch (error) {
-      const message = errorMessage(error);
+      const message = faceServiceErrorMessage(error);
       setResult({ status: "error", message });
       toast.error(message);
     } finally {

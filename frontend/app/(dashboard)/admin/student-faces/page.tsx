@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api, errorMessage } from "@/lib/api";
+import { api, errorMessage, faceServiceErrorMessage } from "@/lib/api";
 import { cameraErrorMessage, captureFrame, startCamera, stopCamera } from "@/lib/camera";
 import { CONSENT_VERSION, FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
@@ -175,7 +175,7 @@ export default function AdminStudentFacesPage() {
       releaseCamera();
       await loadStatus(selectedStudentId);
     } catch (error) {
-      const message = errorMessage(error);
+      const message = faceServiceErrorMessage(error);
       setFormError(message);
       toast.error(message);
     } finally {
@@ -339,7 +339,7 @@ export default function AdminStudentFacesPage() {
                 {statusLoading ? (
                   <p className="text-sm text-muted-foreground">Checking face status…</p>
                 ) : statusError ? (
-                  <p className="text-sm text-destructive">{errorMessage(statusError)}</p>
+                  <p className="text-sm text-destructive">{faceServiceErrorMessage(statusError)}</p>
                 ) : status?.registered ? (
                   <>
                     <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">

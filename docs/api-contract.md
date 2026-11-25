@@ -101,6 +101,8 @@ Location results are `verified`, `out_of_range`, `unavailable`, or `not_required
 | POST | `/admin/face/register/{student_id}` | admin | `{ "consent_version": "1.0", "frames": [...], "consent_confirmed": true, "consent_reference": "form-123" }`; accepts a student profile ID or its user ID |
 | POST | `/attendance/face` | student | `{ "session_id": "...", "frames": [...], "challenge": "turn_left", "latitude": 0, "longitude": 0, "accuracy": 0 }` |
 
+Status endpoints are database-only and available from the main API; registration, deletion, and verification require the face-capable deployment.
+
 The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Raw images are decoded in memory and never persisted. Embeddings are encrypted at rest with Fernet. Registration requires at least three valid frames with evidence of movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Student self-registration records the student's explicit consent; admin-on-behalf registration requires `consent_confirmed: true` and an auditable consent reference, and writes an audit entry naming the admin actor and student. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Liveness checks are anti-spoofing heuristics and do not guarantee prevention of a determined replay attack. A professor/manual correction path exists for students unable to use biometrics.
 
 ## Attendance

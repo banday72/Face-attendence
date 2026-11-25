@@ -316,6 +316,13 @@ export function errorMessage(error: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
+export function faceServiceErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 404 && error.message === "Not Found") {
+    return "Face service is unavailable. Please try again after the face API is deployed.";
+  }
+  return errorMessage(error);
+}
+
 export function serverFieldError(error: unknown, field: string): string | undefined {
   if (!(error instanceof ApiError)) return undefined;
   const key = Object.keys(error.fields).find(

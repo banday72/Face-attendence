@@ -20,6 +20,18 @@
   },
   "rewrites": [
     {
+      "source": "/api/v1/face/status",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/api/v1/admin/face/status/(.*)",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
       "source": "/api/v1/face/(.*)",
       "destination": "https://face-attendance-api.onrender.com/api/v1/face/$1"
     },

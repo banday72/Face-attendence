@@ -187,6 +187,6 @@ The Vercel backend runs `alembic upgrade head` during build; run it manually aga
 - `CORS_ORIGINS`: `https://your-domain.example`
 - `TRUSTED_PROXY_IPS`: Render proxy ranges if proxy-aware rate limiting is enabled
 
-The root `vercel.json` proxies `/api/v1/face/*`, `/api/v1/attendance/face`, and `/api/v1/admin/face/*` to `https://face-attendance-api.onrender.com`. Keep the Render service name unchanged or update those destinations. Use the Starter plan (or larger) so the first face request does not wait for a cold start. If you run multiple instances, use a shared Redis-backed rate limiter.
+The root `vercel.json` serves the DB-only `/api/v1/face/status` and `/api/v1/admin/face/status/*` endpoints from the Vercel backend, and proxies model-backed `/api/v1/face/*`, `/api/v1/attendance/face`, and `/api/v1/admin/face/*` endpoints to `https://face-attendance-api.onrender.com`. Keep the Render service name unchanged or update those destinations. Use the Starter plan (or larger) so the first face request does not wait for a cold start. If you run multiple instances, use a shared Redis-backed rate limiter.
 
 See `docs/architecture.md` for data model and flow details.

@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
-import { api, errorMessage } from "@/lib/api";
+import { api, faceServiceErrorMessage } from "@/lib/api";
 import { cameraErrorMessage, captureFrame, startCamera, stopCamera } from "@/lib/camera";
 import { CONSENT_VERSION, FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
 import { useResource } from "@/lib/hooks";
@@ -122,8 +122,8 @@ export default function FaceRegisterPage() {
       toast.success("Face registration complete");
       status.reload();
     } catch (error) {
-      setFormError(errorMessage(error));
-      toast.error(errorMessage(error));
+      setFormError(faceServiceErrorMessage(error));
+      toast.error(faceServiceErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -139,7 +139,7 @@ export default function FaceRegisterPage() {
       reset();
       status.reload();
     } catch (error) {
-      toast.error(errorMessage(error));
+      toast.error(faceServiceErrorMessage(error));
       setDeleting(false);
     }
   };
@@ -246,7 +246,7 @@ export default function FaceRegisterPage() {
               {status.loading ? (
                 <p className="text-sm text-muted-foreground">Checking your face status…</p>
               ) : status.error ? (
-                <p className="text-sm text-destructive">{errorMessage(status.error)}</p>
+                <p className="text-sm text-destructive">{faceServiceErrorMessage(status.error)}</p>
               ) : status.data?.registered ? (
                 <>
                   <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
