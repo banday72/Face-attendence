@@ -149,3 +149,33 @@ def test_admin_registers_student_face_with_consent(
     )
     assert logs.status_code == 200
     assert logs.json()["total"] >= 1
+
+
+def test_admin_face_endpoints_accept_user_id(
+    client: TestClient, db_session: Session, fake_face_engine: None
+) -> None:
+    data = create_academic_data(db_session)
+    create_user(db_session, email="admin@university.edu", password="Admin123!", role="admin")
+    admin_headers = login_headers(client, "admin@university.edu", "Admin123!")
+    user_id = data["enrolled_user"].id
+    frames = [f"data:image/jpeg;base64,a@{offset}" for offset in (0, 50, 100)]
+
+    status = client.get(f"/api/v1/admin/face/status/{user_id}", headers=admin_headers)
+    assert status.status_code == 200, status.text
+    assert status.json()["is_registered"] is False
+
+    registered = client.post(
+        f"/api/v1/admin/face/register/{user_id}",
+        headers=admin_headers,
+        json={
+            "consent_version": settings.biometric_consent_version,
+            "frames": frames,
+            "consent_confirmed": True,
+            "consent_reference": "FORM-USER-ID",
+        },
+    )
+    assert registered.status_code == 201, registered.text
+
+    after = client.get(f"/api/v1/admin/face/status/{user_id}", headers=admin_headers)
+    assert after.status_code == 200, after.text
+    assert after.json()["is_registered"] is True

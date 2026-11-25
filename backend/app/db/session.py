@@ -10,15 +10,17 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import settings
 
 connect_args: dict[str, object] = {}
+is_postgres = settings.database_url.startswith("postgresql")
 if settings.database_url.startswith("sqlite"):
     connect_args["check_same_thread"] = False
-elif settings.database_url.startswith("postgresql"):
+elif is_postgres:
     connect_args["prepare_threshold"] = 0
 
 engine: Engine = create_engine(
     settings.database_url,
     connect_args=connect_args,
-    pool_pre_ping=False,
+    pool_pre_ping=is_postgres,
+    pool_recycle=60 if is_postgres else -1,
     future=True,
 )
 

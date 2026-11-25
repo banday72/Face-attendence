@@ -53,8 +53,8 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 | DELETE | `/admin/classes/{id}/enrollments/{student_id}` | Unenroll a student |
 | GET, POST | `/admin/schedules` | List/create weekly timetable entries |
 | GET, PATCH, DELETE | `/admin/schedules/{id}` | Manage weekly timetable entry |
-| GET | `/admin/face/status/{student_id}` | Registration status for a selected student |
-| POST | `/admin/face/register/{student_id}` | Register a student's face with explicit admin-recorded consent |
+| GET | `/admin/face/status/{student_id}` | Registration status; accepts a student profile ID or its user ID |
+| POST | `/admin/face/register/{student_id}` | Register a student's face with explicit admin-recorded consent; accepts a student profile ID or its user ID |
 | GET | `/admin/audit-logs` | Query modification history |
 
 Professor and student option endpoints return profile IDs, not user account IDs; use those IDs for course assignments, class sections, and enrollments. Course-professor assignments are catalog metadata; attendance permissions remain scoped by the professor assigned to a class section.
@@ -97,8 +97,8 @@ Location results are `verified`, `out_of_range`, `unavailable`, or `not_required
 | GET | `/face/status` | student | Registration status and consent metadata |
 | POST | `/face/register` | student | `{ "consent_version": "1.0", "frames": ["data:image/jpeg;base64,..."] }` |
 | DELETE | `/face/me` | student | Delete all biometric embeddings and consent |
-| GET | `/admin/face/status/{student_id}` | admin | Registration status for a selected student |
-| POST | `/admin/face/register/{student_id}` | admin | `{ "consent_version": "1.0", "frames": [...], "consent_confirmed": true, "consent_reference": "form-123" }` |
+| GET | `/admin/face/status/{student_id}` | admin | Registration status; accepts a student profile ID or its user ID |
+| POST | `/admin/face/register/{student_id}` | admin | `{ "consent_version": "1.0", "frames": [...], "consent_confirmed": true, "consent_reference": "form-123" }`; accepts a student profile ID or its user ID |
 | POST | `/attendance/face` | student | `{ "session_id": "...", "frames": [...], "challenge": "turn_left", "latitude": 0, "longitude": 0, "accuracy": 0 }` |
 
 The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Raw images are decoded in memory and never persisted. Embeddings are encrypted at rest with Fernet. Registration requires at least three valid frames with evidence of movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Student self-registration records the student's explicit consent; admin-on-behalf registration requires `consent_confirmed: true` and an auditable consent reference, and writes an audit entry naming the admin actor and student. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Liveness checks are anti-spoofing heuristics and do not guarantee prevention of a determined replay attack. A professor/manual correction path exists for students unable to use biometrics.

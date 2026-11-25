@@ -88,6 +88,15 @@ def _get_or_404(db: Session, model: Any, entity_id: str, label: str) -> Any:
     return entity
 
 
+def _resolve_student(db: Session, identifier: str) -> Student:
+    student = db.get(Student, identifier)
+    if student is None:
+        student = db.scalar(select(Student).where(Student.user_id == identifier))
+    if student is None:
+        raise AppError(404, "not_found", "Student not found")
+    return student
+
+
 def _check_unique(db: Session, model: Any, column: Any, value: Any, label: str, exclude_id: str | None = None) -> None:
     query = select(model).where(column == value)
     if exclude_id:
@@ -1316,9 +1325,7 @@ def delete_schedule(
 
 @router.get("/face/status/{student_id}", response_model=FaceStatusOut)
 def admin_face_status(student_id: str, db: DB_Dependency) -> FaceStatusOut:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise AppError(404, "not_found", "Student not found")
+    student = _resolve_student(db, student_id)
     consent = student.consent
     count = face_service.active_embedding_count(db, student)
     return FaceStatusOut(
@@ -1350,9 +1357,7 @@ def admin_register_face(
             "Biometric consent version is outdated",
             {"expected_version": settings.biometric_consent_version},
         )
-    student = db.get(Student, student_id)
-    if student is None:
-        raise AppError(404, "not_found", "Student not found")
+    student = _resolve_student(db, student_id)
     analysis = face_service.analyze_frames(payload.frames)
     count = face_service.register_embeddings(db, student, analysis)
     face_service.set_consent(db, student, payload.consent_version)

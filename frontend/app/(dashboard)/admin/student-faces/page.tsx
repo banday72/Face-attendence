@@ -33,8 +33,8 @@ import { api, errorMessage } from "@/lib/api";
 import { cameraErrorMessage, captureFrame, startCamera, stopCamera } from "@/lib/camera";
 import { CONSENT_VERSION, FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
-import { normalizeFaceStatus, normalizePaginated, normalizeUser } from "@/lib/normalize";
-import type { FaceStatus, User } from "@/lib/types";
+import { normalizeFaceStatus, normalizePaginated, normalizeStudentOption } from "@/lib/normalize";
+import type { FaceStatus, StudentOption } from "@/lib/types";
 
 interface CapturedFrame {
   data: string;
@@ -63,8 +63,8 @@ export default function AdminStudentFacesPage() {
   const studentsLoader = useCallback(
     () =>
       api
-        .get<unknown>("/admin/users", { query: { role: "student", page_size: 100 } })
-        .then((payload) => normalizePaginated(payload, normalizeUser).items),
+        .get<unknown>("/admin/students", { query: { page_size: 100 } })
+        .then((payload) => normalizePaginated(payload, normalizeStudentOption).items),
     [],
   );
   const students = useResource(studentsLoader);
@@ -183,7 +183,7 @@ export default function AdminStudentFacesPage() {
     }
   };
 
-  const studentOptions = (students.data ?? []).filter((item: User) => {
+  const studentOptions = (students.data ?? []).filter((item: StudentOption) => {
     const needle = debouncedStudentSearch.trim().toLowerCase();
     if (!needle) return true;
     return [item.full_name, item.email, item.university_id]
@@ -213,7 +213,7 @@ export default function AdminStudentFacesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Select student</SelectItem>
-                {studentOptions.map((item: User) => (
+                {studentOptions.map((item: StudentOption) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.full_name} {item.university_id ? `· ${item.university_id}` : ""}
                   </SelectItem>
