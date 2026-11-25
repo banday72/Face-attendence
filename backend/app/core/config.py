@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     face_encryption_key: str = DEFAULT_FACE_ENCRYPTION_KEY
     face_match_threshold: float = 0.82
-    face_model_name: str = "buffalo_l"
+    face_model_name: str = "buffalo_sc"
     face_liveness_min_frames: int = 3
     face_liveness_movement: float = 12.0
     face_retention_days: int = 365

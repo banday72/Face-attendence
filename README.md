@@ -179,7 +179,7 @@ The Vercel backend runs `alembic upgrade head` during build; run it manually aga
 
 ### Face-capable API on Render
 
-`render.yaml` defines a Docker web service that installs both requirements files and mounts a persistent volume at `/home/appuser/.insightface` for the InsightFace model. Deploy it as a Render Blueprint, then set the `sync: false` values in the Render dashboard:
+`render.yaml` defines a free Docker web service that installs both requirements files and bakes the lightweight `buffalo_sc` InsightFace model into the image at `/home/appuser/.insightface`, so no paid disk or card is required. Deploy it as a Render Blueprint, then set the `sync: false` values in the Render dashboard:
 
 - `DATABASE_URL`: the same Neon database used by Vercel
 - `JWT_SECRET`: the exact same value as Vercel, so tokens work across both services
@@ -187,6 +187,6 @@ The Vercel backend runs `alembic upgrade head` during build; run it manually aga
 - `CORS_ORIGINS`: `https://your-domain.example`
 - `TRUSTED_PROXY_IPS`: Render proxy ranges if proxy-aware rate limiting is enabled
 
-The root `vercel.json` serves the DB-only `/api/v1/face/status` and `/api/v1/admin/face/status/*` endpoints from the Vercel backend, and proxies model-backed `/api/v1/face/*`, `/api/v1/attendance/face`, and `/api/v1/admin/face/*` endpoints to `https://face-attendance-api.onrender.com`. Keep the Render service name unchanged or update those destinations. Use the Starter plan (or larger) so the first face request does not wait for a cold start. If you run multiple instances, use a shared Redis-backed rate limiter.
+The root `vercel.json` serves the DB-only `/api/v1/face/status` and `/api/v1/admin/face/status/*` endpoints from the Vercel backend, and proxies model-backed `/api/v1/face/*`, `/api/v1/attendance/face`, and `/api/v1/admin/face/*` endpoints to `https://face-attendance-api.onrender.com`. Keep the Render service name unchanged or update those destinations. The free plan spins down after 15 idle minutes, so the first face request after inactivity may take about a minute. If you later move to a paid always-on plan, use a shared Redis-backed rate limiter when running multiple instances.
 
 See `docs/architecture.md` for data model and flow details.
