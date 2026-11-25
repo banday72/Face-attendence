@@ -177,16 +177,17 @@ The root `vercel.json` routes `/api/*` to the FastAPI service and all other path
 
 The Vercel backend runs `alembic upgrade head` during build; run it manually against the same database if you deploy outside Vercel. The Vercel backend installs only `backend/requirements.txt`; the face stack is in `backend/requirements-face.txt` and is intentionally excluded to stay under the Python bundle limit.
 
-### Face-capable API on Render
+### Face-capable worker
 
-`render.yaml` defines a free Docker web service that installs both requirements files and bakes the lightweight `buffalo_sc` InsightFace model into the image at `/home/appuser/.insightface`, so no paid disk or card is required. Deploy it as a Render Blueprint, then set the `sync: false` values in the Render dashboard:
+The main Vercel backend handles all `/api/v1/face/*`, `/api/v1/admin/face/*`, and `/api/v1/attendance/face` routes. It keeps authentication, consent, audit logging, encrypted embeddings, and matching in the main API. Frame decoding and InsightFace analysis can be delegated to a small worker by setting `FACE_SERVICE_URL`; without it, the main API analyzes frames locally.
 
-- `DATABASE_URL`: the same Neon database used by Vercel
-- `JWT_SECRET`: the exact same value as Vercel, so tokens work across both services
-- `FACE_ENCRYPTION_KEY`: the exact same value as Vercel
-- `CORS_ORIGINS`: `https://your-domain.example`
-- `TRUSTED_PROXY_IPS`: Render proxy ranges if proxy-aware rate limiting is enabled
+`render.yaml` still defines an optional free Docker service with the bundled `buffalo_sc` model, but Render may require a card for account verification even on the free plan. For a no-card setup, run the worker locally and expose it with a Cloudflare Quick Tunnel:
 
-The root `vercel.json` serves the DB-only `/api/v1/face/status` and `/api/v1/admin/face/status/*` endpoints from the Vercel backend, and proxies model-backed `/api/v1/face/*`, `/api/v1/attendance/face`, and `/api/v1/admin/face/*` endpoints to `https://face-attendance-api.onrender.com`. Keep the Render service name unchanged or update those destinations. The free plan spins down after 15 idle minutes, so the first face request after inactivity may take about a minute. If you later move to a paid always-on plan, use a shared Redis-backed rate limiter when running multiple instances.
+1. Install `backend/requirements-face.txt` and download `buffalo_sc.zip` into `$HOME/.insightface/models/buffalo_sc`.
+2. Start the worker: `py -m uvicorn app.face_worker:app --host 127.0.0.1 --port 8010` from `backend`, with `ENVIRONMENT=development ALLOW_DEV_SECRETS=1 FACE_MODEL_NAME=buffalo_sc`.
+3. Start a tunnel: `cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8010`.
+4. Set the printed `https://*.trycloudflare.com` URL as Vercel `FACE_SERVICE_URL` and redeploy.
+
+Quick Tunnel URLs change whenever the tunnel restarts, so update `FACE_SERVICE_URL` after each restart. The PC running the worker must stay online; this is suitable for demos and local development, not production. If using a hosted worker, set `FACE_SERVICE_URL` to its base URL and keep the service warm.
 
 See `docs/architecture.md` for data model and flow details.

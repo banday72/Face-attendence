@@ -32,18 +32,6 @@
       }
     },
     {
-      "source": "/api/v1/face/(.*)",
-      "destination": "https://face-attendance-api.onrender.com/api/v1/face/$1"
-    },
-    {
-      "source": "/api/v1/attendance/face",
-      "destination": "https://face-attendance-api.onrender.com/api/v1/attendance/face"
-    },
-    {
-      "source": "/api/v1/admin/face/(.*)",
-      "destination": "https://face-attendance-api.onrender.com/api/v1/admin/face/$1"
-    },
-    {
       "source": "/api/(.*)",
       "destination": {
         "service": "backend"

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 
+import httpx
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
@@ -133,6 +134,50 @@ def _movement(centers: list[tuple[float, float]]) -> float:
 
 
 def analyze_frames(
+    frames: list[str],
+    config: Settings = settings,
+) -> FrameAnalysis:
+    service_url = (config.face_service_url or "").strip().rstrip("/")
+    if not service_url:
+        return _analyze_frames_local(frames, config)
+    try:
+        response = httpx.post(
+            f"{service_url}/analyze",
+            json={
+                "frames": frames,
+                "min_frames": config.face_liveness_min_frames,
+                "min_movement": config.face_liveness_movement,
+            },
+            timeout=60.0,
+        )
+    except httpx.HTTPError as exc:
+        raise _model_unavailable(str(exc)) from exc
+    if response.status_code >= 400:
+        try:
+            error = response.json().get("error", {})
+        except ValueError:
+            error = {}
+        if not isinstance(error, dict):
+            error = {}
+        raise AppError(
+            response.status_code,
+            str(error.get("code") or "face_model_unavailable"),
+            str(error.get("message") or "Face recognition model is unavailable"),
+            error.get("details") if isinstance(error.get("details"), dict) else {"detail": response.text[:500]},
+        )
+    data = response.json()
+    np = _np()
+    try:
+        return FrameAnalysis(
+            embedding=np.asarray(data["embedding"], dtype=np.float32),
+            embeddings=[np.asarray(item, dtype=np.float32) for item in data["embeddings"]],
+            centers=[(float(center[0]), float(center[1])) for center in data["centers"]],
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise _model_unavailable("face worker returned an invalid analysis") from exc
+
+
+def _analyze_frames_local(
     frames: list[str],
     config: Settings = settings,
 ) -> FrameAnalysis:
