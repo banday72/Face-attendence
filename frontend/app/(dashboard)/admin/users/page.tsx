@@ -1,7 +1,7 @@
 "use client";
 
-import { KeyRound, Plus, RefreshCw, Search } from "lucide-react";
-import { useCallback, useState, type FormEvent } from "react";
+import { KeyRound, Plus, RefreshCw, Search, Upload } from "lucide-react";
+import { useCallback, useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { FormField } from "@/components/common/form-field";
@@ -48,6 +48,19 @@ import { useDebouncedValue, useResource } from "@/lib/hooks";
 import { normalizeDepartment, normalizePaginated, normalizeUser } from "@/lib/normalize";
 import type { Department, Role, User } from "@/lib/types";
 import { initials } from "@/lib/utils";
+
+interface BulkImportError {
+  row: number;
+  email: string;
+  error: string;
+}
+
+interface BulkImportResult {
+  total: number;
+  created: number;
+  failed: number;
+  errors: BulkImportError[];
+}
 
 interface UserForm {
   full_name: string;
@@ -106,6 +119,8 @@ export default function UsersPage() {
   const [resetPassword, setResetPassword] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
 
   const loader = useCallback(
     () =>
@@ -253,6 +268,25 @@ export default function UsersPage() {
     }
   };
 
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const result = await api.post<BulkImportResult>("/admin/users/bulk", formData);
+      setImportResult(result);
+      toast.success(`Imported ${result.created} of ${result.total} users`);
+      resource.reload();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -263,6 +297,20 @@ export default function UsersPage() {
           <>
             <Button variant="outline" onClick={resource.reload}>
               <RefreshCw /> Refresh
+            </Button>
+            <input
+              id="bulk-user-import"
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <Button
+              variant="outline"
+              loading={importing}
+              onClick={() => document.getElementById("bulk-user-import")?.click()}
+            >
+              <Upload /> Bulk import
             </Button>
             <Button variant="outline" onClick={() => openCreate("professor")}>
               <Plus /> Add professor
@@ -601,6 +649,51 @@ export default function UsersPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(importResult)}
+        onOpenChange={(open) => {
+          if (!open) setImportResult(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk import complete</DialogTitle>
+            <DialogDescription>
+              CSV headers: role, full_name, email, password, university_id, employee_id,
+              department_id or department, phone, program, year_level, title, office.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-md border border-border p-3 text-center">
+              <p className="text-xs text-muted-foreground">Rows</p>
+              <p className="text-xl font-semibold">{importResult?.total ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-border p-3 text-center">
+              <p className="text-xs text-muted-foreground">Created</p>
+              <p className="text-xl font-semibold text-success">{importResult?.created ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-border p-3 text-center">
+              <p className="text-xs text-muted-foreground">Failed</p>
+              <p className="text-xl font-semibold text-destructive">{importResult?.failed ?? 0}</p>
+            </div>
+          </div>
+          {importResult?.errors.length ? (
+            <div className="max-h-56 space-y-2 overflow-auto">
+              {importResult.errors.map((error) => (
+                <div key={error.row} className="rounded-md border border-border p-2 text-xs">
+                  <span className="font-semibold">Row {error.row}</span>
+                  {error.email ? ` · ${error.email}` : ""}
+                  <p className="mt-1 text-muted-foreground">{error.error}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button onClick={() => setImportResult(null)}>Done</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

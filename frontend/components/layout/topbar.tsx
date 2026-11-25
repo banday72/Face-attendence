@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { api } from "@/lib/api";
+import { useResource } from "@/lib/hooks";
 import { breadcrumbsForPath, navItemsForRole } from "@/lib/navigation";
 import type { Role, User } from "@/lib/types";
 import { cn, initials, roleLabel } from "@/lib/utils";
@@ -33,6 +35,36 @@ interface TopbarProps {
   onMenuClick: () => void;
   onLogout: () => void;
   loggingOut: boolean;
+}
+
+interface AlertItem {
+  id: string;
+  title: string;
+  description: string;
+  severity: "warning" | "danger" | "info";
+  href: string | null;
+}
+
+function normalizeAlerts(payload: unknown): AlertItem[] {
+  const root = payload as { items?: unknown };
+  if (!Array.isArray(root.items)) return [];
+  return root.items.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    if (typeof value.id !== "string" || typeof value.title !== "string") return [];
+    return [
+      {
+        id: value.id,
+        title: value.title,
+        description: typeof value.description === "string" ? value.description : "",
+        severity:
+          value.severity === "danger" || value.severity === "info"
+            ? value.severity
+            : "warning",
+        href: typeof value.href === "string" ? value.href : null,
+      },
+    ];
+  });
 }
 
 export function Topbar({
@@ -51,6 +83,14 @@ export function Topbar({
   const results = navItemsForRole(user.role as Role)
     .filter((item) => item.label.toLowerCase().includes(search.trim().toLowerCase()))
     .slice(0, 6);
+  const alertsEnabled = user.role === "admin";
+  const alertsLoader = useCallback(
+    () => api.get<unknown>("/admin/alerts").then(normalizeAlerts),
+    [],
+  );
+  const alerts = useResource(alertsLoader, alertsEnabled);
+  const { reload: reloadAlerts } = alerts;
+  const alertCount = alerts.data?.length ?? 0;
 
   useEffect(() => setMounted(true), []);
 
@@ -61,6 +101,12 @@ export function Topbar({
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!alertsEnabled) return;
+    const timer = window.setInterval(() => reloadAlerts(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [alertsEnabled, reloadAlerts]);
 
   return (
     <header className="sticky top-0 z-30 flex h-[72px] items-center gap-3 border-b border-border bg-card px-4 sm:px-6">
@@ -146,16 +192,73 @@ export function Topbar({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Notifications">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            aria-label={`Notifications${alertCount ? `, ${alertCount} alerts` : ""}`}
+          >
             <Bell />
+            {alertCount ? (
+              <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-coral text-[10px] font-bold text-navy">
+                {alertCount}
+              </span>
+            ) : null}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+        <DropdownMenuContent align="end" className="w-80">
+          <div className="flex items-center justify-between">
+            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+            {alertCount ? <Badge variant="warning">{alertCount} new</Badge> : null}
+          </div>
           <DropdownMenuSeparator />
-          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-            You&apos;re all caught up. Attendance alerts will appear here.
-          </p>
+          {alertsEnabled ? (
+            alerts.loading ? (
+              <p className="px-3 py-6 text-center text-xs text-muted-foreground">Loading alerts…</p>
+            ) : alerts.data?.length ? (
+              <div className="max-h-80 space-y-1 overflow-auto p-1">
+                {alerts.data.map((alert) => (
+                  <DropdownMenuItem key={alert.id} asChild={Boolean(alert.href)}>
+                    {alert.href ? (
+                      <Link href={alert.href} className="flex flex-col items-start gap-1 py-2">
+                        <span className="flex items-center gap-2 text-xs font-semibold">
+                          <span
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              alert.severity === "danger"
+                                ? "bg-destructive"
+                                : alert.severity === "warning"
+                                  ? "bg-warning"
+                                  : "bg-primary",
+                            )}
+                          />
+                          {alert.title}
+                        </span>
+                        {alert.description ? (
+                          <span className="text-[11px] text-muted-foreground">{alert.description}</span>
+                        ) : null}
+                      </Link>
+                    ) : (
+                      <div className="flex flex-col items-start gap-1 py-2">
+                        <span className="text-xs font-semibold">{alert.title}</span>
+                        {alert.description ? (
+                          <span className="text-[11px] text-muted-foreground">{alert.description}</span>
+                        ) : null}
+                      </div>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            ) : (
+              <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                You&apos;re all caught up. Attendance alerts will appear here.
+              </p>
+            )
+          ) : (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+              You&apos;re all caught up. Attendance alerts will appear here.
+            </p>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

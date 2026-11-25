@@ -32,7 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api, errorMessage, type QueryValue } from "@/lib/api";
-import { useResource } from "@/lib/hooks";
+import { useDebouncedValue, useResource } from "@/lib/hooks";
 import {
   normalizeAttendance,
   normalizeClass,
@@ -91,6 +91,7 @@ export function ReportViewer({ scope }: ReportViewerProps) {
     setFilters((current) => ({ ...current, page }));
   };
 
+  const debouncedSearch = useDebouncedValue(filters.search, 300);
   const query = useMemo<Record<string, QueryValue>>(
     () => ({
       period: filters.period,
@@ -100,15 +101,15 @@ export function ReportViewer({ scope }: ReportViewerProps) {
       status: filters.status || undefined,
       from_date: filters.from_date || undefined,
       to_date: filters.to_date || undefined,
-      search: filters.search || undefined,
+      search: debouncedSearch || undefined,
     }),
     [
+      debouncedSearch,
       filters.class_id,
       filters.course_id,
       filters.department_id,
       filters.from_date,
       filters.period,
-      filters.search,
       filters.status,
       filters.to_date,
     ],

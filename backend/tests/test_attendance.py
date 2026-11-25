@@ -246,3 +246,26 @@ def test_sessions_list_filters_and_rbac(client: TestClient, db_session: Session)
     admin = client.get("/api/v1/sessions", headers=admin_headers)
     assert admin.status_code == 200
     assert admin.json()["total"] == 1
+
+
+def test_session_qr_validity_has_five_minute_minimum(client: TestClient, db_session: Session) -> None:
+    data = create_academic_data(db_session)
+    headers = login_headers(client, "prof@university.edu", "Professor123!")
+    now = utcnow()
+    payload = {
+        "class_id": data["class"].id,
+        "classroom_id": data["classroom"].id,
+        "starts_at": now.isoformat(),
+        "ends_at": (now + timedelta(hours=1)).isoformat(),
+        "require_location": True,
+        "require_face": False,
+        "qr_validity_seconds": 299,
+    }
+
+    too_short = client.post("/api/v1/sessions", headers=headers, json=payload)
+    assert too_short.status_code == 422
+
+    payload["qr_validity_seconds"] = 300
+    created = client.post("/api/v1/sessions", headers=headers, json=payload)
+    assert created.status_code == 201, created.text
+    assert created.json()["qr_validity_seconds"] == 300

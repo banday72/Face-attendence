@@ -35,9 +35,11 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/admin/dashboard` | System-wide counts and attendance statistics |
+| GET | `/admin/alerts` | Attendance and active-session alerts for the notification bell |
 | GET, POST | `/admin/departments` | List/create departments |
 | GET, PATCH, DELETE | `/admin/departments/{id}` | Manage department |
 | GET, POST | `/admin/users` | List/create users of any role; professor/student create requires role-specific IDs |
+| POST | `/admin/users/bulk` | Upload a UTF-8 CSV (max 500 rows) to create users; returns per-row results |
 | GET, PATCH, DELETE | `/admin/users/{id}` | Manage user account, including role-specific profile fields |
 | POST | `/admin/users/{id}/reset-password` | Reset a professor/student password and revoke active refresh sessions |
 | GET | `/admin/professors` | Professor options keyed by professor profile ID |
@@ -84,7 +86,7 @@ Weekly timetable entries use `day_of_week` `0=Monday` through `6=Sunday`, plus `
 | GET | `/sessions/active` | student | Active sessions for enrolled classes |
 | POST | `/attendance/qr` | student | `{ "token": "...", "latitude": 0, "longitude": 0, "accuracy": 0 }` |
 
-QR payload contains only a versioned, random token (`uat:v1:<token>`). The database stores a SHA-256 hash of the token. Tokens are single-purpose, expire, are rotated on refresh, and are validated entirely on the backend. Each token may be used only once per student per session. Enrollment, session state, expiry, and classroom radius are checked server-side.
+QR payload contains only a versioned, random token (`uat:v1:<token>`). The database stores a SHA-256 hash of the token. Tokens are single-purpose, expire, are rotated on refresh, and are validated entirely on the backend. `qr_validity_seconds` has a 300-second (5-minute) minimum; the default is 300 seconds. Each token may be used only once per student per session. Enrollment, session state, expiry, and classroom radius are checked server-side.
 
 Location results are `verified`, `out_of_range`, `unavailable`, or `not_required`. `require_location` applies to both QR and face check-ins; out-of-range check-ins are rejected with `403 location_out_of_range`. QR check-ins send location fields with the token; face check-ins send the same fields alongside frames. `latitude`, `longitude`, and `accuracy` are optional when a session does not require location. GPS is treated as one signal, not proof of presence; short-lived tokens and active liveness checks are additional signals.
 

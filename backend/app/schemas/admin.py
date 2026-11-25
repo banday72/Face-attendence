@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import EmailStr, Field, field_validator, model_validator
 
@@ -92,6 +92,19 @@ class PasswordResetIn(StrictModel):
     @classmethod
     def check_password(cls, value: str) -> str:
         return validate_password(value)
+
+
+class BulkImportError(StrictModel):
+    row: int
+    email: str
+    error: str
+
+
+class BulkImportResult(StrictModel):
+    total: int
+    created: int
+    failed: int
+    errors: list[BulkImportError]
 
 
 class UserAdminOut(UserOut):
@@ -277,3 +290,16 @@ class AuditLogOut(ORMModel):
 class DashboardOut(StrictModel):
     counts: dict[str, int]
     attendance: dict[str, float | int]
+
+
+class AlertOut(StrictModel):
+    id: str
+    title: str
+    description: str
+    severity: Literal["warning", "danger", "info"]
+    href: str | None = None
+    created_at: datetime | None = None
+
+
+class AlertsOut(StrictModel):
+    items: list[AlertOut]

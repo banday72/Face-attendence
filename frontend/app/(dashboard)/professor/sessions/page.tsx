@@ -71,6 +71,7 @@ interface SessionForm {
   start_time: string;
   end_time: string;
   late_minutes: string;
+  qr_validity_seconds: string;
   qr_refresh_seconds: string;
   require_location: boolean;
   require_face: boolean;
@@ -83,6 +84,7 @@ const defaultForm: SessionForm = {
   start_time: toDateTimeLocal(new Date()),
   end_time: toDateTimeLocal(new Date(Date.now() + 90 * 60_000)),
   late_minutes: "10",
+  qr_validity_seconds: "300",
   qr_refresh_seconds: "60",
   require_location: true,
   require_face: true,
@@ -148,6 +150,7 @@ function SessionsContent() {
     if (form.start_time && form.end_time && new Date(form.end_time) <= new Date(form.start_time)) {
       nextErrors.end_time = "End time must be after start time.";
     }
+    if (Number(form.qr_validity_seconds) < 300) nextErrors.qr_validity_seconds = "Use at least 300 seconds (5 minutes).";
     if (Number(form.qr_refresh_seconds) < 10) nextErrors.qr_refresh_seconds = "Use at least 10 seconds.";
     if (form.require_face && !form.challenge) nextErrors.challenge = "Choose a liveness challenge.";
     setFieldErrors(nextErrors);
@@ -162,6 +165,7 @@ function SessionsContent() {
         starts_at: new Date(form.start_time).toISOString(),
         ends_at: new Date(form.end_time).toISOString(),
         late_minutes: Number(form.late_minutes),
+        qr_validity_seconds: Number(form.qr_validity_seconds),
         qr_refresh_seconds: Number(form.qr_refresh_seconds),
         require_location: form.require_location,
         require_face: form.require_face,
@@ -435,6 +439,17 @@ function SessionsContent() {
                 min={0}
                 value={form.late_minutes}
                 onChange={(event) => setForm((current) => ({ ...current, late_minutes: event.target.value }))}
+              />
+            </FormField>
+            <FormField label="QR validity (seconds)" htmlFor="session-qr-validity" error={fieldErrors.qr_validity_seconds}>
+              <Input
+                id="session-qr-validity"
+                type="number"
+                min={300}
+                value={form.qr_validity_seconds}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, qr_validity_seconds: event.target.value }))
+                }
               />
             </FormField>
             <FormField label="QR refresh (seconds)" htmlFor="session-qr" error={fieldErrors.qr_refresh_seconds}>

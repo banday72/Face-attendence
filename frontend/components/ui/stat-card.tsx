@@ -9,10 +9,10 @@ type Tone = "primary" | "success" | "warning" | "purple" | "sky" | "rose";
 const tones: Record<Tone, string> = {
   primary: "bg-primary/10 text-primary",
   success: "bg-navy/10 text-navy dark:bg-cream/10 dark:text-cream",
-  warning: "bg-coral/12 text-coral",
+  warning: "bg-coral/12 text-coral-strong",
   purple: "bg-secondary text-secondary-foreground",
   sky: "bg-muted text-foreground",
-  rose: "bg-coral/10 text-coral",
+  rose: "bg-coral/10 text-coral-strong",
 };
 
 interface StatCardProps {
@@ -71,7 +71,7 @@ export function StatCard({
               "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold",
               trend >= 0
                 ? "bg-primary/10 text-primary"
-                : "bg-coral/12 text-coral",
+                : "bg-coral/12 text-coral-strong",
             )}
           >
             {trend >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}

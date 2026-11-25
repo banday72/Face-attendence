@@ -1,10 +1,22 @@
 from __future__ import annotations
 
+import csv
+import io
 from datetime import datetime
 from typing import Any, Literal, cast
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
-from sqlalchemy import func, or_, select
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
+from pydantic import ValidationError
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,7 +44,11 @@ from app.models import (
     course_professors,
 )
 from app.schemas.admin import (
+    AlertOut,
+    AlertsOut,
     AuditLogOut,
+    BulkImportError,
+    BulkImportResult,
     ClassCreate,
     ClassOut,
     ClassUpdate,
@@ -212,6 +228,69 @@ def dashboard(db: DB_Dependency) -> DashboardOut:
     )
 
 
+@router.get("/alerts", response_model=AlertsOut)
+def alerts(db: DB_Dependency) -> AlertsOut:
+    now = utcnow()
+    items: list[AlertOut] = []
+    attended_case = case((AttendanceRecord.status.in_(["present", "late"]), 1), else_=0)
+    low_attendance = db.execute(
+        select(
+            Student.id,
+            User.full_name,
+            User.email,
+            func.count(AttendanceRecord.id).label("total"),
+            func.sum(attended_case).label("attended"),
+        )
+        .join(User, User.id == Student.user_id)
+        .join(AttendanceRecord, AttendanceRecord.student_id == Student.id)
+        .group_by(Student.id, User.full_name, User.email)
+        .having(func.count(AttendanceRecord.id) >= 3)
+        .having(func.sum(attended_case) * 1.0 / func.count(AttendanceRecord.id) < 0.75)
+        .order_by(func.count(AttendanceRecord.id).desc())
+        .limit(5)
+    ).all()
+    for student_id, full_name, email, total, attended_count in low_attendance:
+        rate = round((attended_count or 0) / total * 100)
+        items.append(
+            AlertOut(
+                id=f"low-attendance-{student_id}",
+                title=f"Low attendance: {full_name}",
+                description=f"{rate}% attendance across {total} marked sessions.",
+                severity="warning",
+                href=f"/admin/users?search={email}",
+                created_at=now,
+            )
+        )
+
+    sessions = db.scalars(
+        select(AttendanceSession)
+        .where(
+            AttendanceSession.status == "active",
+            or_(AttendanceSession.current_qr_hash.is_(None), AttendanceSession.ends_at < now),
+        )
+        .order_by(AttendanceSession.starts_at.desc())
+        .limit(5)
+    ).all()
+    for session in sessions:
+        overdue = session.ends_at < now
+        items.append(
+            AlertOut(
+                id=f"session-{session.id}",
+                title="Active session needs attention",
+                description=(
+                    f"Session ended at {session.ends_at:%H:%M} but is still active."
+                    if overdue
+                    else "Session is active but has no QR code."
+                ),
+                severity="danger" if overdue else "info",
+                href="/professor/sessions",
+                created_at=now,
+            )
+        )
+
+    return AlertsOut(items=items[:8])
+
+
 @router.get("/departments", response_model=Page[DepartmentOut])
 def list_departments(
     db: DB_Dependency,
@@ -350,10 +429,9 @@ def list_users(
     )
 
 
-@router.post("/users", response_model=UserAdminOut, status_code=status.HTTP_201_CREATED)
-def create_user(
-    payload: UserCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
-) -> UserAdminOut:
+def _create_user_record(
+    db: Session, payload: UserCreate, actor: User, request: Request
+) -> User:
     email = str(payload.email).lower()
     _check_unique(db, User, User.email, email, "Email")
     if payload.role == "student":
@@ -417,7 +495,77 @@ def create_user(
         db.rollback()
         raise AppError(409, "conflict", "User could not be created due to duplicate identifiers") from exc
     db.refresh(user)
-    return _user_out(db, user)
+    return user
+
+
+@router.post("/users", response_model=UserAdminOut, status_code=status.HTTP_201_CREATED)
+def create_user(
+    payload: UserCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
+) -> UserAdminOut:
+    return _user_out(db, _create_user_record(db, payload, actor, request))
+
+
+@router.post("/users/bulk", response_model=BulkImportResult)
+async def bulk_import_users(
+    request: Request,
+    db: DB_Dependency,
+    file: UploadFile = File(...),
+    actor: User = Depends(require_admin),
+) -> BulkImportResult:
+    raw = await file.read()
+    if len(raw) > 2_000_000:
+        raise AppError(413, "validation_error", "CSV file exceeds the 2 MB limit")
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise AppError(422, "validation_error", "CSV file must be UTF-8 encoded") from exc
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise AppError(422, "validation_error", "CSV file is empty")
+    missing = {"role", "full_name", "email"} - set(reader.fieldnames)
+    if missing:
+        raise AppError(422, "validation_error", f"CSV is missing columns: {', '.join(sorted(missing))}")
+    rows = list(reader)
+    if not rows:
+        raise AppError(422, "validation_error", "CSV file has no data rows")
+    if len(rows) > 500:
+        raise AppError(422, "validation_error", "CSV import is limited to 500 rows")
+
+    errors: list[BulkImportError] = []
+    created = 0
+    for row_number, row in enumerate(rows, start=2):
+        values: dict[str, Any] = {key: (value or "").strip() for key, value in row.items() if key}
+        values = {key: value for key, value in values.items() if value}
+        email = values.get("email", "")
+        try:
+            department = values.pop("department", None)
+            if department and not values.get("department_id"):
+                department_row = db.scalar(
+                    select(Department).where(
+                        or_(
+                            func.lower(Department.name) == department.lower(),
+                            func.lower(Department.code) == department.lower(),
+                        )
+                    )
+                )
+                if department_row is None:
+                    raise AppError(422, "validation_error", f"Department '{department}' was not found")
+                values["department_id"] = department_row.id
+            if "year_level" in values:
+                try:
+                    values["year_level"] = int(values["year_level"])
+                except ValueError as exc:
+                    raise AppError(422, "validation_error", "year_level must be a number") from exc
+            payload = UserCreate(**values)
+            _create_user_record(db, payload, actor, request)
+            created += 1
+        except (AppError, ValidationError, IntegrityError, ValueError) as exc:
+            db.rollback()
+            message = exc.message if isinstance(exc, AppError) else str(exc)
+            errors.append(BulkImportError(row=row_number, email=email, error=message[:500]))
+
+    return BulkImportResult(total=len(rows), created=created, failed=len(errors), errors=errors)
 
 
 @router.get("/users/{user_id}", response_model=UserAdminOut)

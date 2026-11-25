@@ -19,7 +19,7 @@ class SessionCreate(StrictModel):
     require_face: bool = False
     require_location: bool = True
     late_minutes: int | None = Field(default=None, ge=0, le=240)
-    qr_validity_seconds: int | None = Field(default=None, ge=5, le=3600)
+    qr_validity_seconds: int | None = Field(default=None, ge=300, le=3600)
     qr_refresh_seconds: int | None = Field(default=None, ge=1, le=3600)
     challenge: ChallengeType | None = None
     notes: str | None = Field(default=None, max_length=500)

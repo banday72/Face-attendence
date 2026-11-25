@@ -78,7 +78,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--cream))",
           bright: "hsl(var(--cream-bright))",
         },
-        coral: "hsl(var(--coral))",
+        coral: {
+          DEFAULT: "hsl(var(--coral))",
+          strong: "hsl(var(--coral-strong))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

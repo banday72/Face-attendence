@@ -175,6 +175,18 @@ The root `vercel.json` routes `/api/*` to the FastAPI service and all other path
 - `CORS_ORIGINS=https://your-domain.example`
 - `TRUSTED_PROXY_IPS` for the Vercel proxy range
 
-The Vercel backend runs `alembic upgrade head` during build; run it manually against the same database if you deploy outside Vercel. The Vercel backend installs only `backend/requirements.txt`; the face stack is in `backend/requirements-face.txt` and is intentionally excluded to stay under the 500 MB Python bundle limit. Face endpoints return `503 face_model_unavailable` on Vercel. Deploy the Docker Compose backend (or another long-running Python service that installs both requirements files) for face registration/check-in, and preload the InsightFace model into a persistent volume. Use a shared Redis-backed rate limiter when running multiple instances.
+The Vercel backend runs `alembic upgrade head` during build; run it manually against the same database if you deploy outside Vercel. The Vercel backend installs only `backend/requirements.txt`; the face stack is in `backend/requirements-face.txt` and is intentionally excluded to stay under the Python bundle limit.
+
+### Face-capable API on Render
+
+`render.yaml` defines a Docker web service that installs both requirements files and mounts a persistent volume at `/home/appuser/.insightface` for the InsightFace model. Deploy it as a Render Blueprint, then set the `sync: false` values in the Render dashboard:
+
+- `DATABASE_URL`: the same Neon database used by Vercel
+- `JWT_SECRET`: the exact same value as Vercel, so tokens work across both services
+- `FACE_ENCRYPTION_KEY`: the exact same value as Vercel
+- `CORS_ORIGINS`: `https://your-domain.example`
+- `TRUSTED_PROXY_IPS`: Render proxy ranges if proxy-aware rate limiting is enabled
+
+The root `vercel.json` proxies `/api/v1/face/*`, `/api/v1/attendance/face`, and `/api/v1/admin/face/*` to `https://face-attendance-api.onrender.com`. Keep the Render service name unchanged or update those destinations. Use the Starter plan (or larger) so the first face request does not wait for a cold start. If you run multiple instances, use a shared Redis-backed rate limiter.
 
 See `docs/architecture.md` for data model and flow details.

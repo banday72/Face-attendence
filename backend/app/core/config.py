@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     face_liveness_movement: float = 12.0
     face_retention_days: int = 365
 
-    default_qr_validity_seconds: int = 45
+    default_qr_validity_seconds: int = 300
     qr_refresh_seconds: int = 30
     default_late_minutes: int = 10
     allowed_classroom_radius_meters: float = 150.0
@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     def positive_int(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("must be greater than zero")
+        return value
+
+    @field_validator("default_qr_validity_seconds")
+    @classmethod
+    def min_qr_validity_seconds(cls, value: int) -> int:
+        if value < 300:
+            raise ValueError("QR validity must be at least 300 seconds")
         return value
 
     @field_validator("default_late_minutes")

@@ -9,6 +9,7 @@
     --cream: 42 56% 95%;
     --cream-bright: 45 60% 98%;
     --coral: 10 88% 62%;
+    --coral-strong: 8 72% 42%;
 
     --background: 42 56% 95%;
     --foreground: 218 52% 13%;
@@ -61,6 +62,7 @@
     --muted-foreground: 42 24% 68%;
     --accent: 10 88% 62%;
     --accent-foreground: 218 52% 13%;
+    --coral-strong: 10 92% 72%;
     --destructive: 8 78% 58%;
     --destructive-foreground: 45 60% 98%;
     --success: 158 45% 45%;

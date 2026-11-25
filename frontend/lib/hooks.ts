@@ -19,30 +19,36 @@ export function useResource<T>(
   const [error, setError] = useState<Error | null>(null);
   const [nonce, setNonce] = useState(0);
   const loaderRef = useRef(loader);
+  const requestIdRef = useRef(0);
   loaderRef.current = loader;
 
   const run = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setLoading(true);
     setError(null);
     try {
       const result = await loaderRef.current();
-      setData(result);
+      if (requestId === requestIdRef.current) setData(result);
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught : new Error("Unexpected error"),
-      );
+      if (requestId === requestIdRef.current) {
+        setError(
+          caught instanceof Error ? caught : new Error("Unexpected error"),
+        );
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (!enabled) {
+      requestIdRef.current += 1;
       setLoading(false);
       return;
     }
     void run();
-  }, [enabled, nonce, run]);
+  }, [enabled, loader, nonce, run]);
 
   const reload = useCallback(() => setNonce((value) => value + 1), []);
 

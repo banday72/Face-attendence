@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: face-attendance-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: insightface-models
+      mountPath: /home/appuser/.insightface
+      sizeGB: 2
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FACE_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOW_DEV_SECRETS
+        value: "0"
+      - key: TRUSTED_PROXY_IPS
+        sync: false
+      - key: FACE_MODEL_NAME
+        value: buffalo_l
+      - key: DEFAULT_QR_VALIDITY_SECONDS
+        value: "300"
+      - key: QR_REFRESH_SECONDS
+        value: "60"

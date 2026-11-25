@@ -4,8 +4,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import RefreshToken, Student, User
-from tests.conftest import create_academic_data, create_user, login_headers
+from app.models import AttendanceRecord, RefreshToken, Student, User
+from app.utils.uuid import new_uuid, utcnow
+from tests.conftest import (
+    create_academic_data,
+    create_session_record,
+    create_user,
+    login_headers,
+)
 
 
 def test_admin_creates_role_specific_accounts_and_options(client: TestClient, db_session: Session) -> None:
@@ -192,3 +198,52 @@ def test_admin_user_update_supports_profile_fields(client: TestClient, db_sessio
     assert student is not None
     assert student.program == "Data Science"
     assert student.year_level == 3
+
+
+def test_admin_bulk_import_reports_row_errors(client: TestClient, db_session: Session) -> None:
+    create_user(db_session, email="admin@university.edu", password="Admin123!", role="admin", full_name="Admin")
+    headers = login_headers(client, "admin@university.edu", "Admin123!")
+    csv_text = (
+        "role,full_name,email,password,university_id\n"
+        "student,Bulk Student,bulk@university.edu,Student123!,STU-300\n"
+        "student,Weak Password,weak@university.edu,short,STU-301\n"
+    )
+
+    response = client.post(
+        "/api/v1/admin/users/bulk",
+        headers=headers,
+        files={"file": ("users.csv", csv_text, "text/csv")},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 2
+    assert body["created"] == 1
+    assert body["failed"] == 1
+    assert body["errors"][0]["row"] == 3
+
+
+def test_admin_alerts_include_low_attendance_students(client: TestClient, db_session: Session) -> None:
+    data = create_academic_data(db_session)
+    create_user(db_session, email="admin@university.edu", password="Admin123!", role="admin", full_name="Admin")
+    enrolled = data["enrolled"]
+    for status in ("present", "absent", "absent"):
+        session = create_session_record(db_session, data)
+        db_session.add(
+            AttendanceRecord(
+                id=new_uuid(),
+                session_id=session.id,
+                student_id=enrolled.id,
+                status=status,
+                method="qr",
+                marked_at=utcnow(),
+                created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+        )
+    db_session.commit()
+    headers = login_headers(client, "admin@university.edu", "Admin123!")
+
+    response = client.get("/api/v1/admin/alerts", headers=headers)
+    assert response.status_code == 200, response.text
+    titles = [alert["title"] for alert in response.json()["items"]]
+    assert any("Low attendance" in title for title in titles)
