@@ -6,10 +6,10 @@ import {
   LogOut,
   Menu,
   Moon,
-  Search,
   Sun,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -139,7 +139,13 @@ export function Topbar({
       </div>
 
       <div className="relative ml-auto w-full max-w-xs sm:max-w-sm" ref={searchRef}>
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Image
+          src="/assets/logo.png"
+          alt=""
+          width={18}
+          height={18}
+          className="pointer-events-none absolute left-2.5 top-1/2 size-[18px] -translate-y-1/2 rounded-sm"
+        />
         <input
           value={search}
           onChange={(event) => {
