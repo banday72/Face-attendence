@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   },
   description:
     "Smart university attendance management with QR and face verification for admins, professors, and students.",
+  icons: {
+    icon: "/assets/logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
