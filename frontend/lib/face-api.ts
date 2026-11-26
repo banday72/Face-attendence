@@ -1,5 +1,5 @@
-const FACE_API_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js";
-const FACE_API_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+const FACE_API_SCRIPT_URL = "/face-api/face-api.min.js";
+const FACE_API_MODEL_URL = "/face-api/model/";
 const DESCRIPTOR_SIZE = 128;
 
 interface FaceBox {
