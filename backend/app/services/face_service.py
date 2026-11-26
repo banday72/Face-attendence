@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import base64
-import binascii
 import json
+import math
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 
-import httpx
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 if TYPE_CHECKING:
-    import numpy as np
+    from collections.abc import Sequence
 
 from app.core.config import Settings, settings
 from app.core.errors import AppError
@@ -21,169 +19,49 @@ from app.core.security import decrypt_secret, encrypt_secret
 from app.models import BiometricConsent, FaceEmbedding, Student
 from app.utils.uuid import new_uuid, utcnow
 
-
-@dataclass(frozen=True)
-class FaceDetection:
-    embedding: np.ndarray
-    bbox: tuple[float, float, float, float]
+DESCRIPTOR_SIZE = 128
+VECTOR_VERSION = "2"
 
 
 @dataclass(frozen=True)
 class FrameAnalysis:
-    embedding: np.ndarray
-    embeddings: list[np.ndarray]
+    embedding: list[float]
+    embeddings: list[list[float]]
     centers: list[tuple[float, float]]
 
 
-_face_app: object | None = None
-_face_app_error: str | None = None
-_face_app_error_at: float | None = None
-_FACE_MODEL_RETRY_SECONDS = 30.0
+def _is_finite_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
-def _model_unavailable(detail: str) -> AppError:
-    return AppError(
-        503,
-        "face_model_unavailable",
-        "Face recognition model is unavailable",
-        {"detail": detail, "model": settings.face_model_name},
-    )
-
-
-def _np() -> Any:
-    try:
-        import numpy as np
-
-        return np
-    except ImportError as exc:
-        raise _model_unavailable("numpy is not installed in this deployment") from exc
-
-
-def get_face_app() -> Any:
-    global _face_app, _face_app_error, _face_app_error_at
-    if _face_app is not None:
-        return _face_app
-    now = utcnow().timestamp()
-    if _face_app_error is not None and _face_app_error_at is not None:
-        if now - _face_app_error_at < _FACE_MODEL_RETRY_SECONDS:
-            raise _model_unavailable(_face_app_error)
-        _face_app_error = None
-        _face_app_error_at = None
-    try:
-        from insightface.app import FaceAnalysis
-
-        app = FaceAnalysis(name=settings.face_model_name, providers=["CPUExecutionProvider"])
-        app.prepare(ctx_id=-1, det_size=(640, 640))
-        _face_app = app
-        _face_app_error = None
-        _face_app_error_at = None
-        return app
-    except Exception as exc:
-        _face_app_error = str(exc) or exc.__class__.__name__
-        _face_app_error_at = now
-        raise _model_unavailable(_face_app_error) from exc
-
-
-def decode_frame(frame: str) -> Any:
-    np = _np()
-    try:
-        import cv2
-    except ImportError as exc:
-        raise _model_unavailable("cv2 is not installed in this deployment") from exc
-    try:
-        payload = frame.split(",", 1)[1] if frame.startswith("data:") and "," in frame else frame
-        raw = base64.b64decode(payload, validate=True)
-        if len(raw) > 10_000_000:
-            raise AppError(422, "validation_error", "Face frame exceeds the maximum allowed size")
-        array = np.frombuffer(raw, dtype=np.uint8)
-        image = cv2.imdecode(array, cv2.IMREAD_COLOR)
-    except (binascii.Error, ValueError) as exc:
-        raise AppError(422, "validation_error", "Face frame is not valid base64 image data") from exc
-    if image is None:
-        raise AppError(422, "validation_error", "Face frame could not be decoded as an image")
-    return image
-
-
-def detect_faces(image: object) -> list[FaceDetection]:
-    np = _np()
-    app = get_face_app()
-    detections = app.get(image)
-    results: list[FaceDetection] = []
-    for detection in detections:
-        box = [float(value) for value in detection.bbox[:4]]
-        bbox = (box[0], box[1], box[2], box[3])
-        embedding = np.asarray(detection.embedding, dtype=np.float32)
-        norm = float(np.linalg.norm(embedding))
-        if norm == 0:
-            continue
-        results.append(FaceDetection(embedding=embedding / norm, bbox=bbox))
-    return results
-
-
-def _centers(detection: FaceDetection) -> tuple[float, float]:
-    x1, y1, x2, y2 = detection.bbox
-    return ((x1 + x2) / 2, (y1 + y2) / 2)
-
-
-def _movement(centers: list[tuple[float, float]]) -> float:
-    np = _np()
-    return max(
-        (float(np.linalg.norm(np.asarray(a) - np.asarray(b))) for a in centers for b in centers),
-        default=0.0,
-    )
-
-
-def analyze_frames(
-    frames: list[str],
-    config: Settings = settings,
-) -> FrameAnalysis:
-    service_url = (config.face_service_url or "").strip().rstrip("/")
-    if not service_url:
-        return _analyze_frames_local(frames, config)
-    try:
-        response = httpx.post(
-            f"{service_url}/analyze",
-            json={
-                "frames": frames,
-                "min_frames": config.face_liveness_min_frames,
-                "min_movement": config.face_liveness_movement,
-            },
-            timeout=60.0,
-        )
-    except httpx.HTTPError as exc:
-        raise _model_unavailable(str(exc)) from exc
-    if response.status_code >= 400:
-        try:
-            error = response.json().get("error", {})
-        except ValueError:
-            error = {}
-        if not isinstance(error, dict):
-            error = {}
+def _normalize_vector(vector: Sequence[float]) -> list[float]:
+    if len(vector) != DESCRIPTOR_SIZE or not all(_is_finite_number(value) for value in vector):
         raise AppError(
-            response.status_code,
-            str(error.get("code") or "face_model_unavailable"),
-            str(error.get("message") or "Face recognition model is unavailable"),
-            error.get("details") if isinstance(error.get("details"), dict) else {"detail": response.text[:500]},
+            422,
+            "validation_error",
+            f"Each face frame must contain {DESCRIPTOR_SIZE} finite descriptor values",
         )
-    data = response.json()
-    np = _np()
-    try:
-        return FrameAnalysis(
-            embedding=np.asarray(data["embedding"], dtype=np.float32),
-            embeddings=[np.asarray(item, dtype=np.float32) for item in data["embeddings"]],
-            centers=[(float(center[0]), float(center[1])) for center in data["centers"]],
+    values = [float(value) for value in vector]
+    norm = math.sqrt(sum(value * value for value in values))
+    if norm == 0:
+        raise AppError(
+            422,
+            "face_verification_failed",
+            "Face descriptor is empty",
+            {"liveness": "invalid_descriptor"},
         )
-    except (KeyError, TypeError, ValueError) as exc:
-        raise _model_unavailable("face worker returned an invalid analysis") from exc
+    return [value / norm for value in values]
 
 
-def _analyze_frames_local(
-    frames: list[str],
+def analyze_client_frames(
+    descriptors: list[list[float]],
+    centers: list[list[float]],
     config: Settings = settings,
 ) -> FrameAnalysis:
-    np = _np()
+    if len(descriptors) != len(centers):
+        raise AppError(422, "validation_error", "Descriptor and center counts must match")
     minimum = config.face_liveness_min_frames
-    if len(frames) < minimum:
+    if len(descriptors) < minimum:
         raise AppError(
             422,
             "face_verification_failed",
@@ -191,21 +69,17 @@ def _analyze_frames_local(
             {"liveness": "insufficient_frames"},
         )
 
-    detections_per_frame: list[list[FaceDetection]] = []
-    for frame in frames:
-        image = decode_frame(frame)
-        detections = detect_faces(image)
-        if len(detections) != 1:
-            raise AppError(
-                422,
-                "face_verification_failed",
-                "Each frame must contain exactly one face",
-                {"liveness": "face_count", "faces_detected": len(detections)},
-            )
-        detections_per_frame.append(detections)
+    embeddings = [_normalize_vector(vector) for vector in descriptors]
+    validated_centers: list[tuple[float, float]] = []
+    for center in centers:
+        if len(center) != 2 or not all(_is_finite_number(value) for value in center):
+            raise AppError(422, "validation_error", "Each face frame must include a valid center point")
+        validated_centers.append((float(center[0]), float(center[1])))
 
-    centers = [_centers(frame_detections[0]) for frame_detections in detections_per_frame]
-    movement = _movement(centers)
+    movement = max(
+        (math.dist(first, second) for first in validated_centers for second in validated_centers),
+        default=0.0,
+    )
     if movement < config.face_liveness_movement:
         raise AppError(
             422,
@@ -214,34 +88,51 @@ def _analyze_frames_local(
             {"liveness": "insufficient_movement", "movement": round(movement, 3)},
         )
 
-    embeddings = [frame_detections[0].embedding for frame_detections in detections_per_frame]
-    mean_embedding = np.mean(np.vstack(embeddings), axis=0)
-    norm = float(np.linalg.norm(mean_embedding))
+    mean_embedding = [sum(values) / len(embeddings) for values in zip(*embeddings)]
+    norm = math.sqrt(sum(value * value for value in mean_embedding))
     if norm == 0:
         raise AppError(422, "face_verification_failed", "Face embedding could not be computed")
-    return FrameAnalysis(embedding=mean_embedding / norm, embeddings=embeddings, centers=centers)
+    return FrameAnalysis(
+        embedding=[value / norm for value in mean_embedding],
+        embeddings=embeddings,
+        centers=validated_centers,
+    )
 
 
-def cosine_similarity(left: np.ndarray | list[float], right: np.ndarray | list[float]) -> float:
-    np = _np()
-    a = np.asarray(left, dtype=np.float32)
-    b = np.asarray(right, dtype=np.float32)
-    norm = float(np.linalg.norm(a) * np.linalg.norm(b))
-    if norm == 0:
+def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    if not left or len(left) != len(right):
         return 0.0
-    return float(np.dot(a, b) / norm)
+    if not all(_is_finite_number(value) for value in left) or not all(
+        _is_finite_number(value) for value in right
+    ):
+        return 0.0
+    left_values = [float(value) for value in left]
+    right_values = [float(value) for value in right]
+    left_norm = math.sqrt(sum(value * value for value in left_values))
+    right_norm = math.sqrt(sum(value * value for value in right_values))
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+    return float(
+        sum(a * b for a, b in zip(left_values, right_values)) / (left_norm * right_norm)
+    )
 
 
-def _stored_embedding(row: FaceEmbedding) -> np.ndarray:
-    np = _np()
+def _stored_embedding(row: FaceEmbedding) -> list[float]:
     try:
         vector = json.loads(decrypt_secret(row.encrypted_embedding))
     except (ValueError, json.JSONDecodeError) as exc:
         raise AppError(500, "internal_error", "Stored biometric data is corrupt") from exc
-    return np.asarray(vector, dtype=np.float32)
+    if not isinstance(vector, list) or not vector or not all(_is_finite_number(value) for value in vector):
+        raise AppError(500, "internal_error", "Stored biometric data is corrupt")
+    return [float(value) for value in vector]
 
 
-def register_embeddings(db: Session, student: Student, analysis: FrameAnalysis, config: Settings = settings) -> int:
+def register_embeddings(
+    db: Session,
+    student: Student,
+    analysis: FrameAnalysis,
+    config: Settings = settings,
+) -> int:
     others = db.scalars(
         select(FaceEmbedding).where(FaceEmbedding.student_id != student.id, FaceEmbedding.is_active.is_(True))
     ).all()
@@ -261,9 +152,9 @@ def register_embeddings(db: Session, student: Student, analysis: FrameAnalysis, 
             FaceEmbedding(
                 id=new_uuid(),
                 student_id=student.id,
-                encrypted_embedding=encrypt_secret(json.dumps(embedding.tolist())),
+                encrypted_embedding=encrypt_secret(json.dumps(embedding)),
                 model_name=config.face_model_name,
-                vector_version="1",
+                vector_version=VECTOR_VERSION,
                 is_active=True,
                 created_at=utcnow(),
                 updated_at=utcnow(),

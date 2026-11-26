@@ -153,7 +153,8 @@ def face_check_in(
     *,
     student: Student,
     session_id: str,
-    frames: list[str],
+    descriptors: list[list[float]],
+    centers: list[list[float]],
     challenge: str,
     latitude: float | None = None,
     longitude: float | None = None,
@@ -192,7 +193,7 @@ def face_check_in(
         )
 
     location = location_service.verify_location(session, latitude, longitude, accuracy)
-    analysis = face_service.analyze_frames(frames)
+    analysis = face_service.analyze_client_frames(descriptors, centers)
     score = face_service.verify_student_face(db, student, analysis)
     return _create_record(
         db,

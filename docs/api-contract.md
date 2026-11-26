@@ -95,15 +95,15 @@ Location results are `verified`, `out_of_range`, `unavailable`, or `not_required
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | GET | `/face/status` | student | Registration status and consent metadata |
-| POST | `/face/register` | student | `{ "consent_version": "1.0", "frames": ["data:image/jpeg;base64,..."] }` |
+| POST | `/face/register` | student | `{ "consent_version": "1.0", "descriptors": [[...128 numbers...]], "centers": [[x, y]] }` |
 | DELETE | `/face/me` | student | Delete all biometric embeddings and consent |
 | GET | `/admin/face/status/{student_id}` | admin | Registration status; accepts a student profile ID or its user ID |
-| POST | `/admin/face/register/{student_id}` | admin | `{ "consent_version": "1.0", "frames": [...], "consent_confirmed": true, "consent_reference": "form-123" }`; accepts a student profile ID or its user ID |
-| POST | `/attendance/face` | student | `{ "session_id": "...", "frames": [...], "challenge": "turn_left", "latitude": 0, "longitude": 0, "accuracy": 0 }` |
+| POST | `/admin/face/register/{student_id}` | admin | `{ "consent_version": "1.0", "descriptors": [[...128 numbers...]], "centers": [[x, y]], "consent_confirmed": true, "consent_reference": "form-123" }`; accepts a student profile ID or its user ID |
+| POST | `/attendance/face` | student | `{ "session_id": "...", "descriptors": [[...128 numbers...]], "centers": [[x, y]], "challenge": "turn_left", "latitude": 0, "longitude": 0, "accuracy": 0 }` |
 
-All face endpoints are served by the main API. When `FACE_SERVICE_URL` is set, frame analysis is delegated to a face-capable worker while authentication, consent, audit logging, encrypted embeddings, and matching stay in the main API.
+All face endpoints are served by the main API. The browser generates 128-d descriptors with `face-api.js`; the API never receives image frames. Authentication, consent, audit logging, liveness checks, encrypted embeddings, and matching stay in the main API.
 
-The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Raw images are decoded in memory and never persisted. Embeddings are encrypted at rest with Fernet. Registration requires at least three valid frames with evidence of movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Student self-registration records the student's explicit consent; admin-on-behalf registration requires `consent_confirmed: true` and an auditable consent reference, and writes an audit entry naming the admin actor and student. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Liveness checks are anti-spoofing heuristics and do not guarantee prevention of a determined replay attack. A professor/manual correction path exists for students unable to use biometrics.
+The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Descriptor vectors are finite 128-number arrays, each paired with an `[x, y]` face center. Embeddings are encrypted at rest with Fernet. Registration requires at least three valid descriptors with evidence of center movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Student self-registration records the student's explicit consent; admin-on-behalf registration requires `consent_confirmed: true` and an auditable consent reference, and writes an audit entry naming the admin actor and student. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Browser-side matching is spoofable by modified client code; liveness checks are heuristics, and a professor/manual correction path exists for students unable to use biometrics.
 
 ## Attendance
 

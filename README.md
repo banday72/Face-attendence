@@ -175,19 +175,12 @@ The root `vercel.json` routes `/api/*` to the FastAPI service and all other path
 - `CORS_ORIGINS=https://your-domain.example`
 - `TRUSTED_PROXY_IPS` for the Vercel proxy range
 
-The Vercel backend runs `alembic upgrade head` during build; run it manually against the same database if you deploy outside Vercel. The Vercel backend installs only `backend/requirements.txt`; the face stack is in `backend/requirements-face.txt` and is intentionally excluded to stay under the Python bundle limit.
+The Vercel backend runs `alembic upgrade head` during build; run it manually against the same database if you deploy outside Vercel. The backend installs only `backend/requirements.txt`; no native face stack is needed.
 
-### Face-capable worker
+### Browser face processing
 
-The main Vercel backend handles all `/api/v1/face/*`, `/api/v1/admin/face/*`, and `/api/v1/attendance/face` routes. It keeps authentication, consent, audit logging, encrypted embeddings, and matching in the main API. Frame decoding and InsightFace analysis can be delegated to a small worker by setting `FACE_SERVICE_URL`; without it, the main API analyzes frames locally.
+Face recognition runs in the browser with `face-api.js`. The browser detects the face, generates 128-d descriptors, and sends only descriptor vectors and face-center points to the API. Raw camera frames stay in the browser and are never uploaded. The API keeps authentication, consent, audit logging, liveness checks, encrypted embeddings, and matching.
 
-`render.yaml` still defines an optional free Docker service with the bundled `buffalo_sc` model, but Render may require a card for account verification even on the free plan. For a no-card setup, run the worker locally and expose it with a Cloudflare Quick Tunnel:
-
-1. Install `backend/requirements-face.txt` and download `buffalo_sc.zip` into `$HOME/.insightface/models/buffalo_sc`.
-2. Start the worker: `py -m uvicorn app.face_worker:app --host 127.0.0.1 --port 8010` from `backend`, with `ENVIRONMENT=development ALLOW_DEV_SECRETS=1 FACE_MODEL_NAME=buffalo_sc`.
-3. Start a tunnel: `ssh -R 80:127.0.0.1:8010 nokey@localhost.run -- --output json`.
-4. Set the printed `https://*.app.lhr.life` URL as Vercel `FACE_SERVICE_URL` and redeploy.
-
-Free `localhost.run` domains change after a few hours, so update `FACE_SERVICE_URL` and redeploy whenever the URL changes. The PC running the worker must stay online; this is suitable for demos and local development, not production. If using a hosted worker, set `FACE_SERVICE_URL` to its base URL and keep the service warm.
+This removes the need for `FACE_SERVICE_URL`, Render, InsightFace, tunnels, and a locally hosted worker. Existing InsightFace embeddings were cleared by migration because the new vectors are 128-d; students must re-register face data. Browser-side matching is not strong anti-spoofing: client code can be modified, so the professor/manual correction path remains the fallback for students unable to use biometrics.
 
 See `docs/architecture.md` for data model and flow details.

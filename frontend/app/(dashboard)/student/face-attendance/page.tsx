@@ -26,8 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, errorMessage, faceServiceErrorMessage } from "@/lib/api";
-import { cameraErrorMessage, captureFrame, startCamera, stopCamera } from "@/lib/camera";
+import { cameraErrorMessage, startCamera, stopCamera } from "@/lib/camera";
 import { FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
+import {
+  captureFaceFeatures,
+  faceDetectionErrorMessage,
+  type CapturedFaceFeatures,
+} from "@/lib/face-api";
 import { useResource } from "@/lib/hooks";
 import { getCurrentLocation, type LocationReading } from "@/lib/location";
 import { isRecord, normalizeFaceStatus, normalizePaginated, normalizeSession, pick } from "@/lib/normalize";
@@ -47,7 +52,8 @@ export default function FaceAttendancePage() {
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "active" | "error">("idle");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
-  const [frames, setFrames] = useState<string[]>([]);
+  const [frames, setFrames] = useState<CapturedFaceFeatures[]>([]);
+  const [capturing, setCapturing] = useState(false);
   const [location, setLocation] = useState<LocationReading | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<FaceResult | null>(null);
@@ -106,14 +112,18 @@ export default function FaceAttendancePage() {
     ? FACE_CHALLENGES.find((item) => item.key === challengeKey)?.label ?? challengeKey
     : "No liveness challenge configured for this session";
 
-  const capture = () => {
+  const capture = async () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || capturing) return;
+    setCapturing(true);
     try {
-      setFrames((current) => [...current, captureFrame(video, 480, 0.78)]);
+      const features = await captureFaceFeatures(video);
+      setFrames((current) => [...current, features]);
       setFormError(null);
     } catch (error) {
-      setFormError(cameraErrorMessage(error));
+      setFormError(faceDetectionErrorMessage(error));
+    } finally {
+      setCapturing(false);
     }
   };
 
@@ -160,7 +170,8 @@ export default function FaceAttendancePage() {
       }
       const body: Record<string, unknown> = {
         session_id: selectedId,
-        frames,
+        descriptors: frames.map((frame) => frame.descriptor),
+        centers: frames.map((frame) => frame.center),
         challenge: selected.challenge,
       };
       if (selected.require_location && reading) {
@@ -261,7 +272,7 @@ export default function FaceAttendancePage() {
             <div className="flex flex-wrap gap-2">
               {cameraState === "active" ? (
                 <>
-                  <Button onClick={capture}>
+                  <Button onClick={() => void capture()} loading={capturing}>
                     <Camera /> Capture ({frames.length}/{FACE_FRAME_COUNT})
                   </Button>
                   <Button variant="outline" onClick={releaseCamera}>

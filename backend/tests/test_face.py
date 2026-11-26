@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.errors import AppError
 from app.models import BiometricConsent
 from app.services import face_service
 from app.utils.uuid import utcnow
@@ -19,30 +17,27 @@ from tests.conftest import (
     start_session_via_api,
 )
 
-
-@pytest.fixture()
-def fake_face_engine(monkeypatch: pytest.MonkeyPatch) -> None:
-    def decode(frame: str) -> str:
-        return frame
-
-    def detect(image: str) -> list[face_service.FaceDetection]:
-        label = image.rsplit(",", 1)[1]
-        identity, offset_text = label.split("@")
-        vector = np.array([1.0, 0.0] if identity == "a" else [0.0, 1.0], dtype=np.float32)
-        center = float(offset_text)
-        return [face_service.FaceDetection(embedding=vector, bbox=(center - 10, 0, center + 10, 20))]
-
-    monkeypatch.setattr(face_service, "decode_frame", decode)
-    monkeypatch.setattr(face_service, "detect_faces", detect)
+DESCRIPTOR_SIZE = 128
 
 
-def frames(identity: str, offsets: tuple[int, ...] = (0, 50, 100)) -> list[str]:
-    return [f"data:image/jpeg;base64,{identity}@{offset}" for offset in offsets]
+def descriptor(identity: str) -> list[float]:
+    vector = [0.0] * DESCRIPTOR_SIZE
+    vector[0 if identity == "a" else 1] = 1.0
+    return vector
 
 
-def test_face_registration_liveness_duplicate_and_status(
-    client: TestClient, db_session: Session, fake_face_engine: None
-) -> None:
+def face_payload(identity: str, offsets: tuple[int, ...] = (0, 50, 100)) -> dict[str, object]:
+    return {
+        "descriptors": [descriptor(identity) for _ in offsets],
+        "centers": [[float(offset), 0.0] for offset in offsets],
+    }
+
+
+def registration_payload(identity: str, offsets: tuple[int, ...] = (0, 50, 100)) -> dict[str, object]:
+    return {"consent_version": settings.biometric_consent_version, **face_payload(identity, offsets)}
+
+
+def test_face_registration_liveness_duplicate_and_status(client: TestClient, db_session: Session) -> None:
     create_user(db_session, email="facea@university.edu", password="Student123!", role="student", university_id="FACE-A")
     create_user(db_session, email="faceb@university.edu", password="Student123!", role="student", university_id="FACE-B")
     create_user(db_session, email="facec@university.edu", password="Student123!", role="student", university_id="FACE-C")
@@ -50,8 +45,7 @@ def test_face_registration_liveness_duplicate_and_status(
     headers_b = login_headers(client, "faceb@university.edu", "Student123!")
     headers_c = login_headers(client, "facec@university.edu", "Student123!")
 
-    payload_a = {"consent_version": settings.biometric_consent_version, "frames": frames("a")}
-    registered = client.post("/api/v1/face/register", headers=headers_a, json=payload_a)
+    registered = client.post("/api/v1/face/register", headers=headers_a, json=registration_payload("a"))
     assert registered.status_code == 201, registered.text
     assert registered.json()["embedding_count"] == 3
 
@@ -60,21 +54,21 @@ def test_face_registration_liveness_duplicate_and_status(
     assert status.json()["is_registered"] is True
     assert status.json()["embedding_count"] == 3
 
-    duplicate = client.post("/api/v1/face/register", headers=headers_b, json=payload_a)
+    duplicate = client.post("/api/v1/face/register", headers=headers_b, json=registration_payload("a"))
     assert duplicate.status_code == 409
     assert duplicate.json()["error"]["code"] == "conflict"
 
     registered_b = client.post(
         "/api/v1/face/register",
         headers=headers_b,
-        json={"consent_version": settings.biometric_consent_version, "frames": frames("b")},
+        json=registration_payload("b"),
     )
     assert registered_b.status_code == 201, registered_b.text
 
     no_movement = client.post(
         "/api/v1/face/register",
         headers=headers_c,
-        json={"consent_version": settings.biometric_consent_version, "frames": frames("c", (0, 0, 0))},
+        json=registration_payload("c", (0, 0, 0)),
     )
     assert no_movement.status_code == 422
     assert no_movement.json()["error"]["code"] == "face_verification_failed"
@@ -83,9 +77,21 @@ def test_face_registration_liveness_duplicate_and_status(
     too_few = client.post(
         "/api/v1/face/register",
         headers=headers_c,
-        json={"consent_version": settings.biometric_consent_version, "frames": frames("c", (0, 50))},
+        json=registration_payload("c", (0, 50)),
     )
     assert too_few.status_code == 422
+
+    invalid_descriptor = client.post(
+        "/api/v1/face/register",
+        headers=headers_c,
+        json={
+            "consent_version": settings.biometric_consent_version,
+            "descriptors": [[0.0] * 127 for _ in range(3)],
+            "centers": [[0.0, 0.0], [50.0, 0.0], [100.0, 0.0]],
+        },
+    )
+    assert invalid_descriptor.status_code == 422
+    assert invalid_descriptor.json()["error"]["code"] == "validation_error"
 
     deleted = client.delete("/api/v1/face/me", headers=headers_a)
     assert deleted.status_code == 204
@@ -94,11 +100,8 @@ def test_face_registration_liveness_duplicate_and_status(
     assert status_after.json()["requires_new_consent"] is True
 
 
-def test_face_check_in_with_liveness_challenge(
-    client: TestClient, db_session: Session, fake_face_engine: None
-) -> None:
+def test_face_check_in_with_liveness_challenge(client: TestClient, db_session: Session) -> None:
     data = create_academic_data(db_session)
-    student_id = data["enrolled"].id
     session = create_session_record(db_session, data, require_face=True, require_location=False, challenge="turn_left")
     professor_headers = login_headers(client, "prof@university.edu", "Professor123!")
     student_headers = login_headers(client, "enrolled@university.edu", "Student123!")
@@ -106,7 +109,7 @@ def test_face_check_in_with_liveness_challenge(
     registered = client.post(
         "/api/v1/face/register",
         headers=student_headers,
-        json={"consent_version": settings.biometric_consent_version, "frames": frames("a")},
+        json=registration_payload("a"),
     )
     assert registered.status_code == 201, registered.text
 
@@ -114,7 +117,7 @@ def test_face_check_in_with_liveness_challenge(
     wrong_challenge = client.post(
         "/api/v1/attendance/face",
         headers=student_headers,
-        json={"session_id": session.id, "frames": frames("a"), "challenge": "blink"},
+        json={"session_id": session.id, **face_payload("a"), "challenge": "blink"},
     )
     assert wrong_challenge.status_code == 403
     assert wrong_challenge.json()["error"]["code"] == "face_verification_failed"
@@ -122,17 +125,15 @@ def test_face_check_in_with_liveness_challenge(
     checked_in = client.post(
         "/api/v1/attendance/face",
         headers=student_headers,
-        json={"session_id": session.id, "frames": frames("a"), "challenge": "turn_left"},
+        json={"session_id": session.id, **face_payload("a"), "challenge": "turn_left"},
     )
     assert checked_in.status_code == 201, checked_in.text
     assert checked_in.json()["method"] == "face"
     assert checked_in.json()["face_status"] == "verified"
-    assert checked_in.json()["student_id"] == student_id
+    assert checked_in.json()["student_id"] == data["enrolled"].id
 
 
-def test_face_check_in_requires_active_current_consent(
-    client: TestClient, db_session: Session, fake_face_engine: None
-) -> None:
+def test_face_check_in_requires_active_current_consent(client: TestClient, db_session: Session) -> None:
     data = create_academic_data(db_session)
     session = create_session_record(db_session, data, require_face=True, require_location=False, challenge="turn_left")
     professor_headers = login_headers(client, "prof@university.edu", "Professor123!")
@@ -140,7 +141,7 @@ def test_face_check_in_requires_active_current_consent(
     registered = client.post(
         "/api/v1/face/register",
         headers=student_headers,
-        json={"consent_version": settings.biometric_consent_version, "frames": frames("a")},
+        json=registration_payload("a"),
     )
     assert registered.status_code == 201
     start_session_via_api(client, session.id, professor_headers)
@@ -154,15 +155,13 @@ def test_face_check_in_requires_active_current_consent(
     response = client.post(
         "/api/v1/attendance/face",
         headers=student_headers,
-        json={"session_id": session.id, "frames": frames("a"), "challenge": "turn_left"},
+        json={"session_id": session.id, **face_payload("a"), "challenge": "turn_left"},
     )
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "face_consent_required"
 
 
-def test_face_check_in_enforces_location_when_required(
-    client: TestClient, db_session: Session, fake_face_engine: None
-) -> None:
+def test_face_check_in_enforces_location_when_required(client: TestClient, db_session: Session) -> None:
     data = create_academic_data(db_session)
     session = create_session_record(db_session, data, require_face=True, require_location=True, challenge="turn_left")
     professor_headers = login_headers(client, "prof@university.edu", "Professor123!")
@@ -170,7 +169,7 @@ def test_face_check_in_enforces_location_when_required(
     registered = client.post(
         "/api/v1/face/register",
         headers=student_headers,
-        json={"consent_version": settings.biometric_consent_version, "frames": frames("a")},
+        json=registration_payload("a"),
     )
     assert registered.status_code == 201
     start_session_via_api(client, session.id, professor_headers)
@@ -178,7 +177,7 @@ def test_face_check_in_enforces_location_when_required(
     missing_location = client.post(
         "/api/v1/attendance/face",
         headers=student_headers,
-        json={"session_id": session.id, "frames": frames("a"), "challenge": "turn_left"},
+        json={"session_id": session.id, **face_payload("a"), "challenge": "turn_left"},
     )
     assert missing_location.status_code == 422
 
@@ -187,7 +186,7 @@ def test_face_check_in_enforces_location_when_required(
         headers=student_headers,
         json={
             "session_id": session.id,
-            "frames": frames("a"),
+            **face_payload("a"),
             "challenge": "turn_left",
             "latitude": 37.7749,
             "longitude": -122.4194,
@@ -198,40 +197,7 @@ def test_face_check_in_enforces_location_when_required(
     assert ok.json()["location_status"] == "verified"
 
 
-def test_face_model_retry_after_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    face_service._face_app = None
-    face_service._face_app_error = "boom"
-    face_service._face_app_error_at = utcnow().timestamp() - 31
-
-    calls = {"count": 0}
-
-    class DummyApp:
-        def prepare(self, ctx_id: int, det_size: tuple[int, int]) -> None:
-            return None
-
-    class DummyFaceAnalysis:
-        def __init__(self, name: str, providers: list[str]) -> None:
-            calls["count"] += 1
-
-        def prepare(self, ctx_id: int, det_size: tuple[int, int]) -> None:
-            return None
-
-    import sys
-    import types
-
-    fake_insightface = types.ModuleType("insightface")
-    fake_app_module = types.ModuleType("insightface.app")
-    fake_app_module.FaceAnalysis = DummyFaceAnalysis
-    fake_insightface.app = fake_app_module
-    monkeypatch.setitem(sys.modules, "insightface", fake_insightface)
-    monkeypatch.setitem(sys.modules, "insightface.app", fake_app_module)
-
-    app = face_service.get_face_app()
-    assert app is not None
-    assert calls["count"] == 1
-
-    face_service._face_app = None
-    face_service._face_app_error = "boom"
-    face_service._face_app_error_at = utcnow().timestamp()
-    with pytest.raises(AppError):
-        face_service.get_face_app()
+def test_descriptor_similarity_is_pure_python() -> None:
+    assert face_service.cosine_similarity(descriptor("a"), descriptor("a")) == pytest.approx(1.0)
+    assert face_service.cosine_similarity(descriptor("a"), descriptor("b")) == pytest.approx(0.0)
+    assert face_service.cosine_similarity([0.0] * DESCRIPTOR_SIZE, descriptor("a")) == pytest.approx(0.0)

@@ -1358,7 +1358,7 @@ def admin_register_face(
             {"expected_version": settings.biometric_consent_version},
         )
     student = _resolve_student(db, student_id)
-    analysis = face_service.analyze_frames(payload.frames)
+    analysis = face_service.analyze_client_frames(payload.descriptors, payload.centers)
     count = face_service.register_embeddings(db, student, analysis)
     face_service.set_consent(db, student, payload.consent_version)
     write_audit_log(

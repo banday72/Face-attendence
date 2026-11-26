@@ -23,13 +23,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
 import { api, faceServiceErrorMessage } from "@/lib/api";
-import { cameraErrorMessage, captureFrame, startCamera, stopCamera } from "@/lib/camera";
+import { cameraErrorMessage, startCamera, stopCamera } from "@/lib/camera";
 import { CONSENT_VERSION, FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
+import { captureFaceFeatures, faceDetectionErrorMessage } from "@/lib/face-api";
 import { useResource } from "@/lib/hooks";
 import { normalizeFaceStatus } from "@/lib/normalize";
 
 interface CapturedFrame {
-  data: string;
+  thumbnail: string;
+  descriptor: number[];
+  center: [number, number];
   challenge: string;
   label: string;
 }
@@ -41,6 +44,7 @@ export default function FaceRegisterPage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [frames, setFrames] = useState<CapturedFrame[]>([]);
+  const [capturing, setCapturing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -78,18 +82,25 @@ export default function FaceRegisterPage() {
     }
   };
 
-  const capture = () => {
-    if (!videoRef.current) return;
+  const capture = async () => {
+    if (!videoRef.current || capturing) return;
+    setCapturing(true);
     try {
-      const data = captureFrame(videoRef.current, 480, 0.78);
+      const features = await captureFaceFeatures(videoRef.current);
       setFrames((current) => [
         ...current,
-        { data, challenge: currentChallenge.key, label: currentChallenge.label },
+        {
+          ...features,
+          challenge: currentChallenge.key,
+          label: currentChallenge.label,
+        },
       ]);
       setChallengeIndex((current) => (current + 1) % FACE_CHALLENGES.length);
       setFormError(null);
     } catch (error) {
-      setFormError(cameraErrorMessage(error));
+      setFormError(faceDetectionErrorMessage(error));
+    } finally {
+      setCapturing(false);
     }
   };
 
@@ -113,7 +124,8 @@ export default function FaceRegisterPage() {
     try {
       await api.post("/face/register", {
         consent_version: CONSENT_VERSION,
-        frames: frames.map((frame) => frame.data),
+        descriptors: frames.map((frame) => frame.descriptor),
+        centers: frames.map((frame) => frame.center),
       });
       setFrames([]);
       setChallengeIndex(0);
@@ -151,7 +163,7 @@ export default function FaceRegisterPage() {
       <PageHeader
         eyebrow="Biometrics"
         title="Register your face"
-        description="Teach the system your face with active liveness checks. Raw images are processed in memory and never stored."
+        description="Teach the system your face with active liveness checks. Face features are processed in your browser; only encrypted embeddings are stored."
       />
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
@@ -200,7 +212,7 @@ export default function FaceRegisterPage() {
 
             <div className="flex flex-wrap gap-2">
               {cameraState === "active" ? (
-                <Button onClick={capture}>
+                <Button onClick={() => void capture()} loading={capturing}>
                   <Camera /> Capture frame
                 </Button>
               ) : (
@@ -223,7 +235,7 @@ export default function FaceRegisterPage() {
                 {frames.map((frame, index) => (
                   <div key={`${frame.challenge}-${index}`} className="relative shrink-0">
                     <img
-                      src={frame.data}
+                      src={frame.thumbnail}
                       alt={`Frame ${index + 1}`}
                       className="size-20 rounded-md border border-border object-cover"
                     />
@@ -349,7 +361,7 @@ export default function FaceRegisterPage() {
                 <Eye /> Submit face registration
               </Button>
               <p className="text-center text-[11px] text-muted-foreground">
-                Raw frames are cleared from this page immediately after submission.
+                Camera frames stay in this browser and are never uploaded.
               </p>
             </CardContent>
           </Card>

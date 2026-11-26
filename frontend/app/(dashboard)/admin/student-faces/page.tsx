@@ -30,14 +30,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, errorMessage, faceServiceErrorMessage } from "@/lib/api";
-import { cameraErrorMessage, captureFrame, startCamera, stopCamera } from "@/lib/camera";
+import { cameraErrorMessage, startCamera, stopCamera } from "@/lib/camera";
 import { CONSENT_VERSION, FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
+import { captureFaceFeatures, faceDetectionErrorMessage } from "@/lib/face-api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
 import { normalizeFaceStatus, normalizePaginated, normalizeStudentOption } from "@/lib/normalize";
 import type { FaceStatus, StudentOption } from "@/lib/types";
 
 interface CapturedFrame {
-  data: string;
+  thumbnail: string;
+  descriptor: number[];
+  center: [number, number];
   challenge: string;
   label: string;
 }
@@ -51,6 +54,7 @@ export default function AdminStudentFacesPage() {
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "active" | "error">("idle");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [frames, setFrames] = useState<CapturedFrame[]>([]);
+  const [capturing, setCapturing] = useState(false);
   const [challengeIndex, setChallengeIndex] = useState(0);
   const [consent, setConsent] = useState(false);
   const [consentReference, setConsentReference] = useState("");
@@ -129,18 +133,25 @@ export default function AdminStudentFacesPage() {
     }
   };
 
-  const capture = () => {
-    if (!videoRef.current) return;
+  const capture = async () => {
+    if (!videoRef.current || capturing) return;
+    setCapturing(true);
     try {
-      const data = captureFrame(videoRef.current, 480, 0.78);
+      const features = await captureFaceFeatures(videoRef.current);
       setFrames((current) => [
         ...current,
-        { data, challenge: currentChallenge.key, label: currentChallenge.label },
+        {
+          ...features,
+          challenge: currentChallenge.key,
+          label: currentChallenge.label,
+        },
       ]);
       setChallengeIndex((current) => (current + 1) % FACE_CHALLENGES.length);
       setFormError(null);
     } catch (error) {
-      setFormError(cameraErrorMessage(error));
+      setFormError(faceDetectionErrorMessage(error));
+    } finally {
+      setCapturing(false);
     }
   };
 
@@ -166,7 +177,8 @@ export default function AdminStudentFacesPage() {
     try {
       await api.post(`/admin/face/register/${encodeURIComponent(selectedStudentId)}`, {
         consent_version: CONSENT_VERSION,
-        frames: frames.map((frame) => frame.data),
+        descriptors: frames.map((frame) => frame.descriptor),
+        centers: frames.map((frame) => frame.center),
         consent_confirmed: true,
         consent_reference: consentReference.trim(),
       });
@@ -289,7 +301,7 @@ export default function AdminStudentFacesPage() {
 
               <div className="flex flex-wrap gap-2">
                 {cameraState === "active" ? (
-                  <Button onClick={capture}>
+                  <Button onClick={() => void capture()} loading={capturing}>
                     <Camera /> Capture frame
                   </Button>
                 ) : (
@@ -312,7 +324,7 @@ export default function AdminStudentFacesPage() {
                   {frames.map((frame, index) => (
                     <div key={`${frame.challenge}-${index}`} className="relative shrink-0">
                       <img
-                        src={frame.data}
+                        src={frame.thumbnail}
                         alt={`Frame ${index + 1}`}
                         className="size-20 rounded-md border border-border object-cover"
                       />

@@ -3,9 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.schemas.common import ORMModel, StrictModel
+from app.schemas.face import (
+    MAX_FRAMES,
+    MIN_FRAMES,
+    validate_centers,
+    validate_descriptors,
+)
 
 AttendanceStatus = Literal["present", "late", "absent", "excused"]
 AttendanceMethod = Literal["qr", "face", "manual", "system"]
@@ -22,21 +28,28 @@ class QRCheckInIn(StrictModel):
 
 class FaceCheckInIn(StrictModel):
     session_id: str
-    frames: list[str] = Field(min_length=1, max_length=10)
+    descriptors: list[list[float]] = Field(min_length=MIN_FRAMES, max_length=MAX_FRAMES)
+    centers: list[list[float]] = Field(min_length=MIN_FRAMES, max_length=MAX_FRAMES)
     challenge: str = Field(min_length=1, max_length=40)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     accuracy: float | None = Field(default=None, ge=0)
 
-    @field_validator("frames")
+    @field_validator("descriptors")
     @classmethod
-    def validate_frames(cls, value: list[str]) -> list[str]:
-        for frame in value:
-            if not frame.startswith("data:image/"):
-                raise ValueError("frames must be base64 data URIs")
-            if len(frame) > 12_000_000:
-                raise ValueError("frame is too large")
-        return value
+    def descriptors_valid(cls, value: list[list[float]]) -> list[list[float]]:
+        return validate_descriptors(value)
+
+    @field_validator("centers")
+    @classmethod
+    def centers_valid(cls, value: list[list[float]]) -> list[list[float]]:
+        return validate_centers(value)
+
+    @model_validator(mode="after")
+    def matching_counts(self) -> FaceCheckInIn:
+        if len(self.descriptors) != len(self.centers):
+            raise ValueError("descriptor and center counts must match")
+        return self
 
 
 class AttendanceRecordOut(ORMModel):

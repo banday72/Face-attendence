@@ -1,29 +1,18 @@
 from __future__ import annotations
 
-import numpy as np
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.services import face_service
 from tests.conftest import create_academic_data, create_user, login_headers
 
 
-@pytest.fixture()
-def fake_face_engine(monkeypatch: pytest.MonkeyPatch) -> None:
-    def decode(frame: str) -> str:
-        return frame
-
-    def detect(image: str) -> list[face_service.FaceDetection]:
-        label = image.rsplit(",", 1)[1]
-        identity, offset_text = label.split("@")
-        vector = np.array([1.0, 0.0] if identity == "a" else [0.0, 1.0], dtype=np.float32)
-        center = float(offset_text)
-        return [face_service.FaceDetection(embedding=vector, bbox=(center - 10, 0, center + 10, 20))]
-
-    monkeypatch.setattr(face_service, "decode_frame", decode)
-    monkeypatch.setattr(face_service, "detect_faces", detect)
+def face_payload(offsets: tuple[int, ...] = (0, 50, 100)) -> dict[str, object]:
+    descriptor = [1.0] + [0.0] * 127
+    return {
+        "descriptors": [descriptor for _ in offsets],
+        "centers": [[float(offset), 0.0] for offset in offsets],
+    }
 
 
 def test_admin_timetable_crud_and_student_view(client: TestClient, db_session: Session) -> None:
@@ -94,21 +83,22 @@ def test_admin_timetable_rejects_invalid_input_and_duplicates(
 
 
 def test_admin_registers_student_face_with_consent(
-    client: TestClient, db_session: Session, fake_face_engine: None
+    client: TestClient, db_session: Session
 ) -> None:
     data = create_academic_data(db_session)
     create_user(db_session, email="admin@university.edu", password="Admin123!", role="admin")
     admin_headers = login_headers(client, "admin@university.edu", "Admin123!")
     student_headers = login_headers(client, "enrolled@university.edu", "Student123!")
     student_id = data["enrolled"].id
-    frames = [f"data:image/jpeg;base64,a@{offset}" for offset in (0, 50, 100)]
+    features = face_payload()
 
     forbidden = client.post(
         f"/api/v1/admin/face/register/{student_id}",
         headers=student_headers,
         json={
             "consent_version": settings.biometric_consent_version,
-            "frames": frames,
+            "descriptors": features["descriptors"],
+            "centers": features["centers"],
             "consent_confirmed": True,
             "consent_reference": "FORM-1",
         },
@@ -120,7 +110,8 @@ def test_admin_registers_student_face_with_consent(
         headers=admin_headers,
         json={
             "consent_version": settings.biometric_consent_version,
-            "frames": frames,
+            "descriptors": features["descriptors"],
+            "centers": features["centers"],
             "consent_confirmed": False,
             "consent_reference": "FORM-1",
         },
@@ -132,7 +123,8 @@ def test_admin_registers_student_face_with_consent(
         headers=admin_headers,
         json={
             "consent_version": settings.biometric_consent_version,
-            "frames": frames,
+            "descriptors": features["descriptors"],
+            "centers": features["centers"],
             "consent_confirmed": True,
             "consent_reference": "FORM-1",
         },
@@ -152,13 +144,13 @@ def test_admin_registers_student_face_with_consent(
 
 
 def test_admin_face_endpoints_accept_user_id(
-    client: TestClient, db_session: Session, fake_face_engine: None
+    client: TestClient, db_session: Session
 ) -> None:
     data = create_academic_data(db_session)
     create_user(db_session, email="admin@university.edu", password="Admin123!", role="admin")
     admin_headers = login_headers(client, "admin@university.edu", "Admin123!")
     user_id = data["enrolled_user"].id
-    frames = [f"data:image/jpeg;base64,a@{offset}" for offset in (0, 50, 100)]
+    features = face_payload()
 
     status = client.get(f"/api/v1/admin/face/status/{user_id}", headers=admin_headers)
     assert status.status_code == 200, status.text
@@ -169,7 +161,8 @@ def test_admin_face_endpoints_accept_user_id(
         headers=admin_headers,
         json={
             "consent_version": settings.biometric_consent_version,
-            "frames": frames,
+            "descriptors": features["descriptors"],
+            "centers": features["centers"],
             "consent_confirmed": True,
             "consent_reference": "FORM-USER-ID",
         },

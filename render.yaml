@@ -24,7 +24,7 @@ services:
       - key: TRUSTED_PROXY_IPS
         sync: false
       - key: FACE_MODEL_NAME
-        value: buffalo_sc
+        value: face-api-v1
       - key: DEFAULT_QR_VALIDITY_SECONDS
         value: "300"
       - key: QR_REFRESH_SECONDS
