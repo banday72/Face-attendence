@@ -5,22 +5,33 @@ import type {
   AuditLog,
   Classroom,
   ClassItem,
+  ClassProfessor,
   Course,
   CourseProgress,
   CourseProfessor,
   Department,
+  DepartmentDetail,
+  FacultyMember,
   FaceStatus,
+  Holiday,
   NameValue,
   Paginated,
   ProfessorDashboard,
   ProfessorOption,
   QrPayload,
   ReportSummary,
+  RosterEntry,
+  ScheduleGroup,
   ScheduleItem,
+  Semester,
   Session,
   SessionStatus,
   StudentDashboard,
   StudentOption,
+  Subject,
+  TimetableConflict,
+  TimetableEntry,
+  TimetableSummary,
   TrendPoint,
   User,
 } from "@/lib/types";
@@ -118,6 +129,20 @@ function stringList(value: unknown): string[] {
   return [];
 }
 
+function intList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => num(item, Number.NaN))
+    .filter((item): item is number => Number.isFinite(item))
+    .map((item) => Math.trunc(item));
+}
+
+function dateList(value: unknown): string[] {
+  return stringList(value)
+    .map((item) => item.slice(0, 10))
+    .filter(Boolean);
+}
+
 export function idOf(value: unknown): string {
   if (typeof value === "string" || typeof value === "number") return str(value);
   const record = toRaw(value);
@@ -208,6 +233,88 @@ export function normalizeCourseProfessor(value: unknown): CourseProfessor {
   };
 }
 
+export function normalizeSemester(value: unknown): Semester {
+  const raw = toRaw(value);
+  const department = toRaw(raw.department);
+  return {
+    id: idOf(raw),
+    name: pick(raw, ["name", "semester_name"], "Semester"),
+    code: pick(raw, ["code", "semester_code"]),
+    number: pickNumber(raw, ["number"], Number.NaN) || undefined,
+    academic_year: pick(raw, ["academic_year", "year"], "—"),
+    session: pick(raw, ["session"]) || undefined,
+    department_id: idOf(raw.department) || pick(raw, ["department_id"]),
+    department_name:
+      pick(raw, ["department_name"]) || pick(department, ["name"]) || undefined,
+    program: pick(raw, ["program"]) || undefined,
+    start_date: pick(raw, ["start_date"]) || undefined,
+    end_date: pick(raw, ["end_date"]) || undefined,
+    registration_start: pick(raw, ["registration_start"]) || undefined,
+    registration_end: pick(raw, ["registration_end"]) || undefined,
+    exam_start: pick(raw, ["exam_start"]) || undefined,
+    exam_end: pick(raw, ["exam_end"]) || undefined,
+    is_active: pickBool(raw, ["is_active"]),
+    class_count: pickNumber(raw, ["class_count"], Number.NaN) || undefined,
+    is_current: pickBool(raw, ["is_current"]),
+    created_at: pick(raw, ["created_at"]) || undefined,
+  };
+}
+
+export function normalizeFacultyMember(value: unknown): FacultyMember {
+  const raw = toRaw(value);
+  const department = toRaw(raw.department);
+  return {
+    id: idOf(raw),
+    user_id: pick(raw, ["user_id"]),
+    full_name: pick(raw, ["full_name", "name"], "Professor"),
+    email: pick(raw, ["email"]),
+    employee_id: pick(raw, ["employee_id"]),
+    department_id: idOf(raw.department) || pick(raw, ["department_id"]),
+    department_name:
+      pick(raw, ["department_name"]) || pick(department, ["name"]) || undefined,
+    title: pick(raw, ["title"]) || undefined,
+    office: pick(raw, ["office"]) || undefined,
+    is_active: raw.is_active === undefined ? true : bool(raw.is_active, true),
+    course_count: pickNumber(raw, ["course_count"], Number.NaN) || undefined,
+    class_count: pickNumber(raw, ["class_count"], Number.NaN) || undefined,
+    created_at: pick(raw, ["created_at"]) || undefined,
+  };
+}
+
+export function normalizeClassProfessor(value: unknown): ClassProfessor {
+  const raw = toRaw(value);
+  return {
+    id: pick(raw, ["id"]) || `${pick(raw, ["class_id"])}:${pick(raw, ["professor_id"])}`,
+    class_id: pick(raw, ["class_id"]),
+    class_name: pick(raw, ["class_name"]) || undefined,
+    course_id: pick(raw, ["course_id"]) || undefined,
+    course_name: pick(raw, ["course_name"]) || undefined,
+    semester_id: pick(raw, ["semester_id"]) || undefined,
+    semester: pick(raw, ["semester"]) || undefined,
+    academic_year: pick(raw, ["academic_year"]) || undefined,
+    professor_id: idOf(raw.professor) || pick(raw, ["professor_id"]),
+    full_name: pick(raw, ["full_name", "name"], "Professor"),
+    email: pick(raw, ["email"]),
+    employee_id: pick(raw, ["employee_id"]),
+    department_name: pick(raw, ["department_name"]) || undefined,
+    assigned_at: pick(raw, ["assigned_at", "created_at"]),
+  };
+}
+
+export function normalizeRosterEntry(value: unknown): RosterEntry {
+  const raw = toRaw(value);
+  const student = toRaw(raw.student);
+  return {
+    student_id: idOf(raw.student) || pick(raw, ["student_id"]),
+    university_id:
+      pick(raw, ["university_id"]) || pick(student, ["university_id"]) || undefined,
+    student_name:
+      pick(raw, ["student_name"]) || pick(student, ["full_name", "name"], "Student"),
+    enrollment_status: pick(raw, ["enrollment_status", "status"], "enrolled"),
+    record: isRecord(raw.record) ? normalizeAttendance(raw.record) : undefined,
+  };
+}
+
 export function normalizeDepartment(value: unknown): Department {
   const raw = toRaw(value);
   return {
@@ -229,6 +336,7 @@ export function normalizeCourse(value: unknown): Course {
     department_id: idOf(raw.department) || pick(raw, ["department_id"]),
     department_name: pick(raw, ["department_name"]) ||
       pick(toRaw(raw.department), ["name"]),
+    course_type: pick(raw, ["course_type", "type"]) || undefined,
     description: pick(raw, ["description"]),
   };
 }
@@ -240,10 +348,57 @@ export function normalizeClassroom(value: unknown): Classroom {
     name: pick(raw, ["name", "room_name", "room"], "Classroom"),
     building: pick(raw, ["building"]),
     room: pick(raw, ["room", "room_number"]),
+    room_type: pick(raw, ["room_type", "type"]) || undefined,
     latitude: pickNumber(raw, ["latitude", "lat"], Number.NaN),
     longitude: pickNumber(raw, ["longitude", "lng", "lon"], Number.NaN),
     radius_meters: pickNumber(raw, ["radius_meters", "radius"], Number.NaN),
+    radius_override_meters: pickNumber(raw, ["radius_override_meters"], Number.NaN),
     capacity: pickNumber(raw, ["capacity"], Number.NaN),
+    is_active: raw.is_active === undefined ? true : bool(raw.is_active, true),
+    scheduled_classes: pickNumber(raw, ["scheduled_classes"], Number.NaN) || undefined,
+    created_at: pick(raw, ["created_at"]) || undefined,
+  };
+}
+
+export function normalizeHoliday(value: unknown): Holiday {
+  const raw = toRaw(value);
+  return {
+    id: idOf(raw),
+    name: pick(raw, ["name"], "Holiday"),
+    holiday_date: pick(raw, ["holiday_date", "date"]),
+    holiday_type: pick(raw, ["holiday_type", "type"], "Holiday"),
+    description: pick(raw, ["description"]) || undefined,
+    created_at: pick(raw, ["created_at"]) || undefined,
+  };
+}
+
+export function normalizeSubject(value: unknown): Subject {
+  const raw = toRaw(value);
+  const department = toRaw(raw.department);
+  return {
+    id: idOf(raw),
+    code: pick(raw, ["code", "course_code"]),
+    name: pick(raw, ["name", "course_name"], "Subject"),
+    credits: pickNumber(raw, ["credits", "credit_hours"], 3),
+    course_type: pick(raw, ["course_type", "type"], "theoretical"),
+    department_id: idOf(raw.department) || pick(raw, ["department_id"]),
+    department_name: pick(raw, ["department_name"]) || pick(department, ["name"]) || undefined,
+    description: pick(raw, ["description"]) || undefined,
+    semester_ids: stringList(raw.semester_ids),
+    eligible_professor_ids: stringList(raw.eligible_professor_ids),
+    created_at: pick(raw, ["created_at"]) || undefined,
+  };
+}
+
+export function normalizeDepartmentDetail(value: unknown): DepartmentDetail {
+  const raw = flatten(value);
+  const department = normalizeDepartment(raw);
+  return {
+    ...department,
+    teachers: arr(raw.teachers ?? raw.faculty).map(normalizeFacultyMember),
+    subjects: arr(raw.subjects ?? raw.courses).map(normalizeSubject),
+    classes: arr(raw.classes).map(normalizeClass),
+    semesters: arr(raw.semesters).map(normalizeSemester),
   };
 }
 
@@ -270,6 +425,7 @@ export function normalizeClass(value: unknown): ClassItem {
       pick(raw, ["classroom_name"]) || pick(classroom, ["name", "room"]),
     department_id: pick(raw, ["department_id"]),
     term: pick(raw, ["term"]),
+    semester_id: pick(raw, ["semester_id"]),
     semester: pick(raw, ["semester"]),
     academic_year: pick(raw, ["academic_year"]),
     capacity: pickNumber(raw, ["capacity"], Number.NaN),
@@ -301,15 +457,96 @@ export function normalizeSchedule(value: unknown): ScheduleItem {
     class_name: pick(raw, ["class_name"]) || pick(classRaw, ["name"]),
     course_id: pick(raw, ["course_id"]),
     course_name: pick(raw, ["course_name"]) || pick(toRaw(raw.course), ["name"]),
+    professor_id: pick(raw, ["professor_id"]),
     professor_name: pick(raw, ["professor_name"]),
     classroom_id: idOf(classroomRaw) || pick(raw, ["classroom_id"]),
     classroom_name: pick(raw, ["classroom_name"]) || pick(classroomRaw, ["name"]),
+    department_id: pick(raw, ["department_id"]),
+    department_name: pick(raw, ["department_name"]),
+    semester_id: pick(raw, ["semester_id"]),
+    semester_name: pick(raw, ["semester_name"]),
+    schedule_group_id: pick(raw, ["schedule_group_id", "group_id"]) || undefined,
+    class_type: pick(raw, ["class_type"]) || undefined,
+    notes: pick(raw, ["notes"]) || undefined,
+    recurrence_type: pick(raw, ["recurrence_type"]) || undefined,
+    start_date: pick(raw, ["start_date"]) || undefined,
+    end_date: pick(raw, ["end_date"]) || undefined,
+    repeat_days: intList(raw.repeat_days),
+    custom_dates: dateList(raw.custom_dates),
+    holiday_dates: dateList(raw.holiday_dates),
+    exclude_holidays: pickBool(raw, ["exclude_holidays"]),
+    monthly_mode: pick(raw, ["monthly_mode"], "date") === "weekday" ? "weekday" : "date",
     day_of_week: dayOfWeek,
     day_name:
       pick(raw, ["day_name"]) ||
       (Number.isFinite(dayOfWeek) && dayOfWeek >= 0 && dayOfWeek <= 6 ? weekDays[dayOfWeek] : undefined),
     start_time: pick(raw, ["start_time"]),
     end_time: pick(raw, ["end_time"]),
+  };
+}
+
+export function normalizeTimetableEntry(value: unknown): TimetableEntry {
+  const raw = toRaw(value);
+  const dayOfWeek = pickNumber(raw, ["day_of_week"], 0);
+  return {
+    id: pick(raw, ["id"]) || `${pick(raw, ["schedule_id"])}-${pick(raw, ["date"])}`,
+    schedule_id: pick(raw, ["schedule_id"]),
+    group_id: pick(raw, ["group_id", "schedule_group_id"]) || undefined,
+    date: pick(raw, ["date"]).slice(0, 10),
+    day_of_week: dayOfWeek,
+    start_time: pick(raw, ["start_time"]),
+    end_time: pick(raw, ["end_time"]),
+    class_id: pick(raw, ["class_id"]),
+    class_name: pick(raw, ["class_name"]) || undefined,
+    course_id: pick(raw, ["course_id"]) || undefined,
+    course_name: pick(raw, ["course_name"]) || undefined,
+    course_code: pick(raw, ["course_code"]) || undefined,
+    professor_id: pick(raw, ["professor_id"]) || undefined,
+    professor_name: pick(raw, ["professor_name"]) || undefined,
+    classroom_id: pick(raw, ["classroom_id"]) || undefined,
+    classroom_name: pick(raw, ["classroom_name"]) || undefined,
+    department_id: pick(raw, ["department_id"]) || undefined,
+    department_name: pick(raw, ["department_name"]) || undefined,
+    semester_id: pick(raw, ["semester_id"]) || undefined,
+    semester_name: pick(raw, ["semester_name"]) || undefined,
+    class_type: pick(raw, ["class_type"], "Lecture"),
+    notes: pick(raw, ["notes"]) || undefined,
+    recurrence_type: pick(raw, ["recurrence_type"], "weekly"),
+  };
+}
+
+export function normalizeTimetableConflict(value: unknown): TimetableConflict {
+  const raw = toRaw(value);
+  return {
+    type: pick(raw, ["type"], "teacher"),
+    severity: pick(raw, ["severity"], "error") === "warning" ? "warning" : "error",
+    message: pick(raw, ["message"], "Scheduling conflict"),
+    date: pick(raw, ["date"]) ? pick(raw, ["date"]).slice(0, 10) : undefined,
+    schedule_id: pick(raw, ["schedule_id"]) || undefined,
+    other_schedule_id: pick(raw, ["other_schedule_id"]) || undefined,
+  };
+}
+
+export function normalizeTimetableSummary(value: unknown): TimetableSummary {
+  const raw = flatten(value);
+  const byType = isRecord(raw.by_type) ? raw.by_type : {};
+  return {
+    total_schedules: pickNumber(raw, ["total_schedules"]),
+    classes_today: pickNumber(raw, ["classes_today"]),
+    upcoming_classes: pickNumber(raw, ["upcoming_classes"]),
+    conflicts: pickNumber(raw, ["conflicts"]),
+    by_type: Object.fromEntries(
+      Object.entries(byType).map(([key, item]) => [key, num(item)]),
+    ),
+  };
+}
+
+export function normalizeScheduleGroup(value: unknown): ScheduleGroup {
+  const raw = toRaw(value);
+  return {
+    group_id: pick(raw, ["group_id"]),
+    items: arr(raw.items).map(normalizeSchedule),
+    occurrences: pickNumber(raw, ["occurrences"]),
   };
 }
 
@@ -511,7 +748,11 @@ function flatten(value: unknown): Raw {
 
 export function normalizeAdminDashboard(value: unknown): AdminDashboard {
   const raw = flatten(value);
+  const schedulingRaw = isRecord(raw.scheduling) ? raw.scheduling : {};
   return {
+    scheduling: Object.fromEntries(
+      Object.entries(schedulingRaw).map(([key, item]) => [key, num(item)]),
+    ),
     total_users: pickNumber(raw, ["total_users", "users_count", "users"]),
     total_students: pickNumber(raw, ["total_students", "students_count", "students"]),
     total_professors: pickNumber(raw, ["total_professors", "professors_count"]),

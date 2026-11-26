@@ -23,6 +23,7 @@ from app.core.errors import AppError
 from app.models import (
     AttendanceRecord,
     AttendanceSession,
+    Class_,
     Classroom,
     Enrollment,
     Student,
@@ -38,6 +39,7 @@ from app.schemas.session import (
     StartSessionOut,
 )
 from app.services import attendance_service, qr_service
+from app.services.class_service import professor_class_filter
 from app.utils.uuid import new_uuid, utcnow
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -122,7 +124,8 @@ def list_sessions(
         query = query.where(AttendanceSession.class_id == class_id)
     elif user.role == "professor":
         professor = professor_profile(db, user)
-        query = query.where(AttendanceSession.professor_id == professor.id)
+        class_ids = select(Class_.id).where(professor_class_filter(professor.id))
+        query = query.where(AttendanceSession.class_id.in_(class_ids))
     if status_filter:
         query = query.where(AttendanceSession.status == status_filter)
     query = query.order_by(AttendanceSession.starts_at.desc(), AttendanceSession.created_at.desc())

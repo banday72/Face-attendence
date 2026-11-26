@@ -6,13 +6,21 @@ from typing import Annotated
 import jwt
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.security import decode_access_token
 from app.db.session import get_db
-from app.models import AttendanceSession, Class_, Professor, Student, User
+from app.models import (
+    AttendanceSession,
+    Class_,
+    Professor,
+    Student,
+    User,
+    class_professors,
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
@@ -88,7 +96,13 @@ def assert_professor_owns_class(db: Session, user: User, class_id: str) -> Class
     if user.role != "professor":
         raise AppError(403, "forbidden", "Only the assigned professor or an administrator may perform this action")
     profile = professor_profile(db, user)
-    if class_.professor_id != profile.id:
+    assigned = db.scalar(
+        select(class_professors.c.class_id).where(
+            class_professors.c.class_id == class_id,
+            class_professors.c.professor_id == profile.id,
+        )
+    )
+    if class_.professor_id != profile.id and assigned is None:
         raise AppError(403, "forbidden", "You are not assigned to this class")
     return class_
 

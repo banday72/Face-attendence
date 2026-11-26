@@ -7,6 +7,22 @@ export type LocationStatus =
   | "out_of_range"
   | "unavailable"
   | "not_required";
+export type RecurrenceType =
+  | "one_time"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "custom"
+  | "semester";
+export type ClassType = "Lecture" | "Lab" | "Practical" | "Tutorial";
+export type CourseType = "theoretical" | "practical" | "laboratory";
+export type TimetableView = "day" | "week" | "month" | "list";
+export type ConflictType =
+  | "teacher"
+  | "classroom"
+  | "student_group"
+  | "semester_range"
+  | "capacity";
 
 export interface Paginated<T> {
   items: T[];
@@ -76,6 +92,69 @@ export interface CourseProfessor {
   assigned_at: string;
 }
 
+export interface Semester {
+  id: string;
+  name: string;
+  code: string;
+  number?: number;
+  academic_year: string;
+  session?: string;
+  department_id?: string;
+  department_name?: string;
+  program?: string;
+  start_date?: string;
+  end_date?: string;
+  registration_start?: string;
+  registration_end?: string;
+  exam_start?: string;
+  exam_end?: string;
+  is_active: boolean;
+  class_count?: number;
+  is_current?: boolean;
+  created_at?: string;
+}
+
+export interface FacultyMember {
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string;
+  employee_id: string;
+  department_id?: string;
+  department_name?: string;
+  title?: string;
+  office?: string;
+  is_active: boolean;
+  course_count?: number;
+  class_count?: number;
+  created_at?: string;
+}
+
+export interface ClassProfessor {
+  id: string;
+  class_id: string;
+  class_name?: string;
+  course_id?: string;
+  course_name?: string;
+  semester_id?: string;
+  semester?: string;
+  academic_year?: string;
+  professor_id: string;
+  full_name: string;
+  email: string;
+  employee_id: string;
+  department_name?: string;
+  assigned_at: string;
+}
+
+export interface RosterEntry {
+  student_id: string;
+  university_id?: string;
+  student_name: string;
+  enrollment_status: string;
+  record?: AttendanceRecord;
+}
+
 export interface Department {
   id: string;
   name: string;
@@ -91,7 +170,29 @@ export interface Course {
   credits?: number;
   department_id?: string;
   department_name?: string;
+  course_type?: CourseType | string;
   description?: string;
+}
+
+export interface Subject {
+  id: string;
+  code: string;
+  name: string;
+  credits: number;
+  course_type: CourseType | string;
+  department_id: string;
+  department_name?: string;
+  description?: string;
+  semester_ids: string[];
+  eligible_professor_ids: string[];
+  created_at?: string;
+}
+
+export interface DepartmentDetail extends Department {
+  teachers: FacultyMember[];
+  subjects: Subject[];
+  classes: ClassItem[];
+  semesters: Semester[];
 }
 
 export interface Classroom {
@@ -99,10 +200,24 @@ export interface Classroom {
   name: string;
   building?: string;
   room?: string;
+  room_type?: string;
   latitude?: number;
   longitude?: number;
   radius_meters?: number;
+  radius_override_meters?: number;
   capacity?: number;
+  is_active?: boolean;
+  scheduled_classes?: number;
+  created_at?: string;
+}
+
+export interface Holiday {
+  id: string;
+  name: string;
+  holiday_date: string;
+  holiday_type: string;
+  description?: string;
+  created_at?: string;
 }
 
 export interface ClassItem {
@@ -118,6 +233,7 @@ export interface ClassItem {
   classroom_name?: string;
   department_id?: string;
   term?: string;
+  semester_id?: string;
   semester?: string;
   academic_year?: string;
   capacity?: number;
@@ -135,13 +251,78 @@ export interface ScheduleItem {
   class_name?: string;
   course_id?: string;
   course_name?: string;
+  professor_id?: string;
   professor_name?: string;
   classroom_id?: string;
   classroom_name?: string;
+  department_id?: string;
+  department_name?: string;
+  semester_id?: string;
+  semester_name?: string;
+  schedule_group_id?: string;
+  class_type?: ClassType | string;
+  notes?: string;
+  recurrence_type?: RecurrenceType | string;
+  start_date?: string;
+  end_date?: string;
+  repeat_days?: number[];
+  custom_dates?: string[];
+  holiday_dates?: string[];
+  exclude_holidays?: boolean;
+  monthly_mode?: "date" | "weekday";
   day_of_week: number;
   day_name?: string;
   start_time: string;
   end_time: string;
+}
+
+export interface ScheduleGroup {
+  group_id: string;
+  items: ScheduleItem[];
+  occurrences: number;
+}
+
+export interface TimetableEntry {
+  id: string;
+  schedule_id: string;
+  group_id?: string;
+  date: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  class_id: string;
+  class_name?: string;
+  course_id?: string;
+  course_name?: string;
+  course_code?: string;
+  professor_id?: string;
+  professor_name?: string;
+  classroom_id?: string;
+  classroom_name?: string;
+  department_id?: string;
+  department_name?: string;
+  semester_id?: string;
+  semester_name?: string;
+  class_type: ClassType | string;
+  notes?: string;
+  recurrence_type: RecurrenceType | string;
+}
+
+export interface TimetableConflict {
+  type: ConflictType | string;
+  severity: "error" | "warning";
+  message: string;
+  date?: string;
+  schedule_id?: string;
+  other_schedule_id?: string;
+}
+
+export interface TimetableSummary {
+  total_schedules: number;
+  classes_today: number;
+  upcoming_classes: number;
+  conflicts: number;
+  by_type: Record<string, number>;
 }
 
 export interface Session {
@@ -220,6 +401,7 @@ export interface NameValue {
 }
 
 export interface AdminDashboard {
+  scheduling?: Record<string, number>;
   total_users: number;
   total_students: number;
   total_professors: number;

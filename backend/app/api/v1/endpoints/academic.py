@@ -20,17 +20,19 @@ from app.models import (
     Enrollment,
     Professor,
     Schedule,
+    Semester,
     User,
 )
 from app.schemas.academic import (
     ClassroomOption,
     CourseOption,
     DepartmentOption,
+    SemesterOption,
     StudentScheduleItem,
 )
 from app.schemas.admin import ClassOut
 from app.schemas.common import Page, apply_sort, paginate
-from app.services.class_service import DAY_LABELS, class_to_out
+from app.services.class_service import DAY_LABELS, class_to_out, professor_class_filter
 
 router = APIRouter(prefix="", tags=["academic"], dependencies=[Depends(get_current_user)])
 
@@ -48,6 +50,31 @@ def list_departments(
         pattern = f"%{search}%"
         query = query.where(or_(Department.name.ilike(pattern), Department.code.ilike(pattern)))
     query = apply_sort(query, Department.name, params)
+    return paginate(db, query, params)
+
+
+@router.get("/semesters", response_model=Page[SemesterOption])
+def list_semesters(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=100),
+    is_active: bool | None = None,
+) -> Page[SemesterOption]:
+    params = pagination(page, page_size, "academic_year", "desc")
+    query = select(Semester)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Semester.name.ilike(pattern),
+                Semester.code.ilike(pattern),
+                Semester.academic_year.ilike(pattern),
+            )
+        )
+    if is_active is not None:
+        query = query.where(Semester.is_active == is_active)
+    query = query.order_by(Semester.academic_year.desc(), Semester.start_date.desc(), Semester.name.asc())
     return paginate(db, query, params)
 
 
@@ -95,12 +122,15 @@ def professor_classes(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     term: str | None = None,
+    semester_id: str | None = None,
 ) -> Page[ClassOut]:
     params = pagination(page, page_size, "created_at", "desc")
     professor = professor_profile(db, user)
-    query = select(Class_).where(Class_.professor_id == professor.id)
+    query = select(Class_).where(professor_class_filter(professor.id))
     if term:
         query = query.where(Class_.term == term)
+    if semester_id:
+        query = query.where(Class_.semester_id == semester_id)
     query = apply_sort(query, Class_.created_at, params)
     result = paginate(db, query, params)
     return Page[ClassOut](
@@ -119,6 +149,7 @@ def student_classes(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     term: str | None = None,
+    semester_id: str | None = None,
 ) -> Page[ClassOut]:
     params = pagination(page, page_size, "created_at", "desc")
     student = student_profile(db, user)
@@ -129,6 +160,8 @@ def student_classes(
     )
     if term:
         query = query.where(Class_.term == term)
+    if semester_id:
+        query = query.where(Class_.semester_id == semester_id)
     query = apply_sort(query, Class_.created_at, params)
     result = paginate(db, query, params)
     return Page[ClassOut](

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Float, String
+from sqlalchemy import Boolean, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -18,6 +18,10 @@ class Classroom(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     building: Mapped[str | None] = mapped_column(String(100))
     room: Mapped[str | None] = mapped_column(String(30))
+    room_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="Classroom", server_default="Classroom"
+    )
+    capacity: Mapped[int | None] = mapped_column(Integer)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     radius_override_meters: Mapped[float | None] = mapped_column(Float)

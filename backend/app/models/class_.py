@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.enrollment import Enrollment
     from app.models.professor import Professor
     from app.models.schedule import Schedule
+    from app.models.semester import Semester
 
 
 class Class_(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -25,6 +26,9 @@ class Class_(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("professors.id", ondelete="SET NULL"), index=True
     )
     department_id: Mapped[str | None] = mapped_column(ForeignKey("departments.id", ondelete="SET NULL"), index=True)
+    semester_id: Mapped[str | None] = mapped_column(
+        ForeignKey("semesters.id", ondelete="SET NULL"), index=True
+    )
     section: Mapped[str] = mapped_column(String(30), nullable=False)
     term: Mapped[str] = mapped_column(String(30), nullable=False)
     name: Mapped[str | None] = mapped_column(String(150))
@@ -34,6 +38,7 @@ class Class_(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     course: Mapped[Course] = relationship(back_populates="classes")
     professor: Mapped[Professor | None] = relationship(back_populates="classes")
     department: Mapped[Department | None] = relationship(back_populates="classes")
+    semester: Mapped[Semester | None] = relationship(back_populates="classes")
     enrollments: Mapped[list[Enrollment]] = relationship(back_populates="class_", cascade="all, delete-orphan")
     schedules: Mapped[list[Schedule]] = relationship(back_populates="class_", cascade="all, delete-orphan")
     sessions: Mapped[list[AttendanceSession]] = relationship(back_populates="class_", cascade="all, delete-orphan")

@@ -23,7 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import { normalizeAdminDashboard } from "@/lib/normalize";
+import {
+  normalizeAdminDashboard,
+  normalizeTimetableSummary,
+} from "@/lib/normalize";
 import { percent } from "@/lib/utils";
 
 export default function AdminDashboardPage() {
@@ -32,6 +35,14 @@ export default function AdminDashboardPage() {
     [],
   );
   const dashboard = useResource(loader);
+  const scheduleLoader = useCallback(
+    () =>
+      api
+        .get<unknown>("/admin/timetable/summary")
+        .then(normalizeTimetableSummary),
+    [],
+  );
+  const scheduleSummary = useResource(scheduleLoader);
 
   return (
     <div className="space-y-6">
@@ -121,6 +132,35 @@ export default function AdminDashboardPage() {
                 icon={CalendarClock}
                 tone="purple"
                 href="/admin/reports"
+              />
+              <DashboardStatCard
+                title="Timetable rules"
+                value={scheduleSummary.data?.total_schedules ?? 0}
+                icon={CalendarClock}
+                description="Recurring schedules"
+                tone="primary"
+                href="/admin/timetable"
+              />
+              <DashboardStatCard
+                title="Classes today"
+                value={scheduleSummary.data?.classes_today ?? 0}
+                icon={CalendarClock}
+                tone="sky"
+                href="/admin/timetable"
+              />
+              <DashboardStatCard
+                title="Upcoming classes"
+                value={scheduleSummary.data?.upcoming_classes ?? 0}
+                icon={CalendarClock}
+                tone="purple"
+                href="/admin/timetable"
+              />
+              <DashboardStatCard
+                title="Schedule conflicts"
+                value={scheduleSummary.data?.conflicts ?? 0}
+                icon={CalendarClock}
+                tone="warning"
+                href="/admin/timetable"
               />
             </div>
 

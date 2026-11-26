@@ -11,6 +11,14 @@ class DepartmentOption(ORMModel):
     code: str
 
 
+class SemesterOption(ORMModel):
+    id: str
+    name: str
+    code: str
+    academic_year: str
+    is_active: bool
+
+
 class CourseOption(ORMModel):
     id: str
     code: str

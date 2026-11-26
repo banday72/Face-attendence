@@ -91,10 +91,11 @@ export default function DepartmentsPage() {
     event.preventDefault();
     setFormError(null);
     setFieldErrors({});
-    if (!form.name.trim()) {
-      setFieldErrors({ name: "Department name is required." });
-      return;
-    }
+    const nextErrors: Record<string, string> = {};
+    if (!form.name.trim()) nextErrors.name = "Department name is required.";
+    if (form.code.trim().length < 2) nextErrors.code = "Use a department code of at least 2 characters.";
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     setSaving(true);
     try {
       const payload = {
@@ -256,7 +257,7 @@ export default function DepartmentsPage() {
                 placeholder="Computer Science"
               />
             </FormField>
-            <FormField label="Code" htmlFor="dept-code" error={fieldErrors.code}>
+            <FormField label="Code" htmlFor="dept-code" required error={fieldErrors.code}>
               <Input
                 id="dept-code"
                 value={form.code}

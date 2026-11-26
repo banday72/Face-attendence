@@ -46,20 +46,22 @@ import { Switch } from "@/components/ui/switch";
 import { ApiError, api, errorMessage } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
 import {
-  normalizeAttendance,
+  isRecord,
   normalizeClass,
   normalizeCourse,
   normalizeDepartment,
   normalizePaginated,
   normalizeProfessorOption,
+  normalizeRosterEntry,
+  normalizeSemester,
   normalizeStudentOption,
 } from "@/lib/normalize";
 import type {
-  AttendanceRecord,
   ClassItem,
   Course,
   Department,
   ProfessorOption,
+  RosterEntry,
   StudentOption,
 } from "@/lib/types";
 import { formatTime } from "@/lib/utils";
@@ -70,6 +72,7 @@ interface ClassForm {
   course_id: string;
   professor_id: string;
   department_id: string;
+  semester_id: string;
   term: string;
   capacity: string;
   is_active: boolean;
@@ -81,6 +84,7 @@ const emptyForm: ClassForm = {
   course_id: "",
   professor_id: "",
   department_id: "",
+  semester_id: "",
   term: "",
   capacity: "",
   is_active: true,
@@ -89,6 +93,7 @@ const emptyForm: ClassForm = {
 export default function ClassesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [semesterFilter, setSemesterFilter] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ClassItem | null>(null);
@@ -101,27 +106,34 @@ export default function ClassesPage() {
   const [enrollmentClass, setEnrollmentClass] = useState<ClassItem | null>(null);
   const [studentId, setStudentId] = useState("");
   const [enrolling, setEnrolling] = useState(false);
-  const [unenrolling, setUnenrolling] = useState<AttendanceRecord | null>(null);
+  const [unenrolling, setUnenrolling] = useState<RosterEntry | null>(null);
 
   const loader = useCallback(
     () =>
       api.getPaginated<ClassItem>("/admin/classes", normalizeClass, {
-        query: { page, page_size: 20, search: debouncedSearch || undefined },
+        query: {
+          page,
+          page_size: 20,
+          search: debouncedSearch || undefined,
+          semester_id: semesterFilter || undefined,
+        },
       }),
-    [debouncedSearch, page],
+    [debouncedSearch, page, semesterFilter],
   );
   const resource = useResource(loader);
 
   const optionsLoader = useCallback(async () => {
-    const [courses, professors, departments] = await Promise.all([
+    const [courses, professors, departments, semesters] = await Promise.all([
       api.get<unknown>("/courses"),
       api.get<unknown>("/admin/professors", { query: { page_size: 100 } }),
       api.get<unknown>("/departments", { query: { page_size: 100 } }),
+      api.get<unknown>("/semesters", { query: { page_size: 100 } }),
     ]);
     return {
       courses: normalizePaginated(courses, normalizeCourse).items,
       professors: normalizePaginated(professors, normalizeProfessorOption).items,
       departments: normalizePaginated(departments, normalizeDepartment).items,
+      semesters: normalizePaginated(semesters, normalizeSemester).items,
     };
   }, []);
   const options = useResource(optionsLoader);
@@ -138,8 +150,13 @@ export default function ClassesPage() {
   const rosterLoader = useCallback(
     () =>
       api
-        .get<unknown>(`/attendance/classes/${enrollmentClass?.id ?? ""}`, { query: { page_size: 200 } })
-        .then((payload) => normalizePaginated(payload, normalizeAttendance)),
+        .get<unknown>(`/attendance/classes/${enrollmentClass?.id ?? ""}`)
+        .then((payload) =>
+          normalizePaginated(
+            isRecord(payload) ? payload.roster ?? [] : [],
+            normalizeRosterEntry,
+          ),
+        ),
     [enrollmentClass?.id],
   );
   const roster = useResource(rosterLoader, Boolean(enrollmentClass));
@@ -160,6 +177,7 @@ export default function ClassesPage() {
       course_id: item.course_id ?? "",
       professor_id: item.professor_id ?? "",
       department_id: item.department_id ?? "",
+      semester_id: item.semester_id ?? "",
       term: item.term ?? "",
       capacity: item.capacity ? String(item.capacity) : "",
       is_active: item.is_active ?? true,
@@ -175,7 +193,9 @@ export default function ClassesPage() {
     if (!form.name.trim()) nextErrors.name = "Class name is required.";
     if (!form.section.trim()) nextErrors.section = "Class section/number is required.";
     if (!form.course_id) nextErrors.course_id = "Choose a course.";
-    if (!form.term.trim()) nextErrors.term = "Term is required.";
+    if (!form.semester_id && !form.term.trim()) {
+      nextErrors.semester_id = "Choose a semester or enter a term override.";
+    }
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -188,7 +208,8 @@ export default function ClassesPage() {
         course_id: form.course_id,
         professor_id: form.professor_id || null,
         department_id: form.department_id || null,
-        term: form.term.trim(),
+        semester_id: form.semester_id || undefined,
+        term: form.term.trim() || undefined,
         capacity: form.capacity ? Number(form.capacity) : undefined,
         is_active: form.is_active,
       };
@@ -293,8 +314,29 @@ export default function ClassesPage() {
               className="pl-9"
             />
           </div>
-          <p className="text-xs text-muted-foreground">{resource.data?.total ?? 0} class(es)</p>
-        </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={semesterFilter || "all"}
+                onValueChange={(value) => {
+                  setSemesterFilter(value === "all" ? "" : value);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[190px]">
+                  <SelectValue placeholder="All semesters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All semesters</SelectItem>
+                  {(options.data?.semesters ?? []).map((semester) => (
+                    <SelectItem key={semester.id} value={semester.id}>
+                      {semester.name} · {semester.academic_year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{resource.data?.total ?? 0} class(es)</p>
+            </div>
+          </div>
 
         <QueryState
           loading={resource.loading}
@@ -354,7 +396,8 @@ export default function ClassesPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {item.term || "—"}
+                          {item.semester || item.term || "—"}
+                          {item.academic_year ? ` · ${item.academic_year}` : ""}
                         </TableCell>
                         <TableCell>
                           <RowActions
@@ -475,12 +518,32 @@ export default function ClassesPage() {
                 onChange={(event) => setForm((current) => ({ ...current, capacity: event.target.value }))}
               />
             </FormField>
-            <FormField label="Term" htmlFor="class-term" required error={fieldErrors.term}>
+            <FormField label="Semester" htmlFor="class-semester" error={fieldErrors.semester_id}>
+              <Select
+                value={form.semester_id || "none"}
+                onValueChange={(value) =>
+                  setForm((current) => ({ ...current, semester_id: value === "none" ? "" : value }))
+                }
+              >
+                <SelectTrigger id="class-semester">
+                  <SelectValue placeholder="Choose semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Choose semester</SelectItem>
+                  {(options.data?.semesters ?? []).map((semester) => (
+                    <SelectItem key={semester.id} value={semester.id}>
+                      {semester.name} · {semester.academic_year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Term override" htmlFor="class-term" error={fieldErrors.term}>
               <Input
                 id="class-term"
                 value={form.term}
                 onChange={(event) => setForm((current) => ({ ...current, term: event.target.value }))}
-                placeholder="Fall 2026"
+                placeholder="Uses semester name when blank"
               />
             </FormField>
             <div className="flex items-center justify-between rounded-md border border-border p-3 sm:col-span-2">

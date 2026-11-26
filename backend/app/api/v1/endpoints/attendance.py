@@ -43,6 +43,7 @@ from app.schemas.attendance import (
 from app.schemas.common import Page, apply_sort, paginate
 from app.schemas.reports import ReportRecordOut
 from app.services import attendance_service, report_service
+from app.services.class_service import professor_class_filter
 
 router = APIRouter(prefix="", tags=["attendance"])
 
@@ -264,10 +265,11 @@ def correct_attendance(
 @router.get("/professor/dashboard", response_model=ProfessorDashboardOut)
 def professor_dashboard(db: DB_Dependency, user: User = Depends(require_professor)) -> ProfessorDashboardOut:
     professor = professor_profile(db, user)
-    class_ids = select(Class_.id).where(Class_.professor_id == professor.id)
+    professor_filter = professor_class_filter(professor.id)
+    class_ids = select(Class_.id).where(professor_filter)
     session_ids = select(AttendanceSession.id).where(AttendanceSession.class_id.in_(class_ids))
     counts = {
-        "classes": int(db.scalar(select(func.count()).select_from(Class_).where(Class_.professor_id == professor.id)) or 0),
+        "classes": int(db.scalar(select(func.count()).select_from(Class_).where(professor_filter)) or 0),
         "sessions": int(db.scalar(select(func.count()).select_from(AttendanceSession).where(AttendanceSession.class_id.in_(class_ids))) or 0),
         "active_sessions": int(
             db.scalar(

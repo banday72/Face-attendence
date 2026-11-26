@@ -39,8 +39,10 @@ from app.models import (
     Professor,
     RefreshToken,
     Schedule,
+    Semester,
     Student,
     User,
+    class_professors,
     course_professors,
 )
 from app.schemas.admin import (
@@ -51,6 +53,7 @@ from app.schemas.admin import (
     BulkImportResult,
     ClassCreate,
     ClassOut,
+    ClassProfessorOut,
     ClassUpdate,
     CourseCreate,
     CourseOut,
@@ -62,11 +65,15 @@ from app.schemas.admin import (
     DepartmentUpdate,
     EnrollmentCreate,
     EnrollmentOut,
+    FacultyOut,
     PasswordResetIn,
     ProfessorOptionOut,
     ScheduleCreate,
     ScheduleOut,
     ScheduleUpdate,
+    SemesterCreate,
+    SemesterOut,
+    SemesterUpdate,
     StudentOptionOut,
     UserAdminOut,
     UserCreate,
@@ -154,6 +161,7 @@ def _course_out(db: Session, course: Course) -> CourseOut:
         code=course.code,
         name=course.name,
         credits=course.credits,
+        course_type=course.course_type,
         department_id=course.department_id,
         department_name=_department_name(db, course.department_id),
         description=course.description,
@@ -194,6 +202,88 @@ def _course_professor_out(db: Session, course_id: str, professor: Professor, ass
     return CourseProfessorOut(
         id=f"{course_id}:{professor.id}",
         course_id=course_id,
+        professor_id=professor.id,
+        full_name=professor.user.full_name,
+        email=professor.user.email,
+        employee_id=professor.employee_id,
+        department_name=_department_name(db, professor.department_id),
+        assigned_at=assigned_at,
+    )
+
+
+def _semester_out(db: Session, semester: Semester) -> SemesterOut:
+    class_count = int(
+        db.scalar(select(func.count()).select_from(Class_).where(Class_.semester_id == semester.id)) or 0
+    )
+    current_id = db.scalar(
+        select(Semester.id)
+        .where(Semester.is_active.is_(True))
+        .order_by(Semester.academic_year.desc(), Semester.start_date.desc(), Semester.name.asc())
+        .limit(1)
+    )
+    return SemesterOut(
+        id=semester.id,
+        name=semester.name,
+        code=semester.code,
+        academic_year=semester.academic_year,
+        start_date=semester.start_date,
+        end_date=semester.end_date,
+        is_active=semester.is_active,
+        class_count=class_count,
+        is_current=current_id == semester.id,
+        created_at=semester.created_at,
+    )
+
+
+def _faculty_out(db: Session, professor: Professor) -> FacultyOut:
+    course_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(course_professors)
+            .where(course_professors.c.professor_id == professor.id)
+        )
+        or 0
+    )
+    class_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Class_)
+            .where(class_service.professor_class_filter(professor.id))
+        )
+        or 0
+    )
+    return FacultyOut(
+        id=professor.id,
+        user_id=professor.user_id,
+        email=professor.user.email,
+        full_name=professor.user.full_name,
+        employee_id=professor.employee_id,
+        department_id=professor.department_id,
+        department_name=_department_name(db, professor.department_id),
+        title=professor.title,
+        office=professor.office,
+        is_active=professor.user.is_active,
+        course_count=course_count,
+        class_count=class_count,
+        created_at=professor.created_at,
+    )
+
+
+def _class_professor_out(db: Session, class_: Class_, professor: Professor, assigned_at: datetime) -> ClassProfessorOut:
+    course = db.get(Course, class_.course_id)
+    semester = db.get(Semester, class_.semester_id) if class_.semester_id else None
+    class_name = class_.name or (
+        f"{course.code}-{class_.section}" if course else class_.section
+    )
+    return ClassProfessorOut(
+        id=f"{class_.id}:{professor.id}",
+        class_id=class_.id,
+        class_name=class_name,
+        course_id=class_.course_id,
+        course_name=course.name if course else None,
+        semester_id=class_.semester_id,
+        semester=semester.name if semester else class_.term,
+        academic_year=semester.academic_year if semester else None,
         professor_id=professor.id,
         full_name=professor.user.full_name,
         email=professor.user.email,
@@ -404,6 +494,142 @@ def delete_department(
     except IntegrityError as exc:
         db.rollback()
         raise AppError(409, "conflict", "Department is referenced by other records") from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/semesters", response_model=Page[SemesterOut])
+def list_semesters(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=100),
+    is_active: bool | None = None,
+    sort_by: Literal["name", "code", "academic_year", "start_date", "created_at"] = "academic_year",
+    sort_order: Literal["asc", "desc"] = "desc",
+) -> Page[SemesterOut]:
+    params = pagination(page, page_size, sort_by, sort_order)
+    query = select(Semester)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Semester.name.ilike(pattern),
+                Semester.code.ilike(pattern),
+                Semester.academic_year.ilike(pattern),
+            )
+        )
+    if is_active is not None:
+        query = query.where(Semester.is_active == is_active)
+    query = apply_sort(query, getattr(Semester, sort_by), params)
+    result = paginate(db, query, params)
+    return Page[SemesterOut](
+        items=[_semester_out(db, semester) for semester in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
+@router.post("/semesters", response_model=SemesterOut, status_code=status.HTTP_201_CREATED)
+def create_semester(
+    payload: SemesterCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
+) -> SemesterOut:
+    _check_unique(db, Semester, Semester.name, payload.name, "Semester name")
+    _check_unique(db, Semester, Semester.code, payload.code, "Semester code")
+    if payload.is_active:
+        db.query(Semester).filter(Semester.is_active.is_(True)).update(
+            {"is_active": False, "updated_at": utcnow()}, synchronize_session=False
+        )
+    semester = Semester(
+        id=new_uuid(),
+        name=payload.name,
+        code=payload.code,
+        academic_year=payload.academic_year,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        is_active=payload.is_active,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db.add(semester)
+    db.flush()
+    write_audit_log(
+        db,
+        action="semester.create",
+        entity_type="semester",
+        entity_id=semester.id,
+        actor=actor,
+        after=_snapshot(semester, ["id", "name", "code", "academic_year", "is_active"]),
+        request=request,
+    )
+    db.commit()
+    db.refresh(semester)
+    return _semester_out(db, semester)
+
+
+@router.get("/semesters/{semester_id}", response_model=SemesterOut)
+def get_semester(semester_id: str, db: DB_Dependency) -> SemesterOut:
+    return _semester_out(db, _get_or_404(db, Semester, semester_id, "Semester"))
+
+
+@router.patch("/semesters/{semester_id}", response_model=SemesterOut)
+def update_semester(
+    semester_id: str,
+    payload: SemesterUpdate,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> SemesterOut:
+    semester = _get_or_404(db, Semester, semester_id, "Semester")
+    updates = payload.model_dump(exclude_unset=True)
+    if updates.get("name"):
+        _check_unique(db, Semester, Semester.name, updates["name"], "Semester name", semester_id)
+    if updates.get("code"):
+        _check_unique(db, Semester, Semester.code, updates["code"], "Semester code", semester_id)
+    if updates.get("is_active"):
+        db.query(Semester).filter(
+            Semester.id != semester_id, Semester.is_active.is_(True)
+        ).update({"is_active": False, "updated_at": utcnow()}, synchronize_session=False)
+    before = {key: getattr(semester, key, None) for key in updates}
+    for key, value in updates.items():
+        setattr(semester, key, value)
+    semester.updated_at = utcnow()
+    write_audit_log(
+        db,
+        action="semester.update",
+        entity_type="semester",
+        entity_id=semester.id,
+        actor=actor,
+        before=before,
+        after=_snapshot(semester, ["id", "name", "code", "academic_year", "is_active"]),
+        request=request,
+    )
+    db.commit()
+    return _semester_out(db, semester)
+
+
+@router.delete("/semesters/{semester_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_semester(
+    semester_id: str, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
+) -> Response:
+    semester = _get_or_404(db, Semester, semester_id, "Semester")
+    class_count = int(
+        db.scalar(select(func.count()).select_from(Class_).where(Class_.semester_id == semester_id)) or 0
+    )
+    if class_count:
+        raise AppError(409, "conflict", "Semester is referenced by classes and cannot be deleted")
+    write_audit_log(
+        db,
+        action="semester.delete",
+        entity_type="semester",
+        entity_id=semester.id,
+        actor=actor,
+        before=_snapshot(semester, ["id", "name", "code", "academic_year"]),
+        request=request,
+    )
+    db.delete(semester)
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -741,6 +967,50 @@ def list_professors(
     )
 
 
+@router.get("/faculty", response_model=Page[FacultyOut])
+def list_faculty(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=100),
+    department_id: str | None = None,
+    is_active: bool | None = None,
+    sort_by: Literal["full_name", "email", "employee_id", "created_at"] = "full_name",
+    sort_order: Literal["asc", "desc"] = "asc",
+) -> Page[FacultyOut]:
+    params = pagination(page, page_size, sort_by, sort_order)
+    query = select(Professor).join(User, User.id == Professor.user_id)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                User.full_name.ilike(pattern),
+                User.email.ilike(pattern),
+                Professor.employee_id.ilike(pattern),
+            )
+        )
+    if department_id:
+        query = query.where(Professor.department_id == department_id)
+    if is_active is not None:
+        query = query.where(User.is_active == is_active)
+    sort_column: Any
+    if sort_by == "created_at":
+        sort_column = Professor.created_at
+    elif sort_by == "employee_id":
+        sort_column = Professor.employee_id
+    else:
+        sort_column = getattr(User, sort_by)
+    query = apply_sort(query, sort_column, params)
+    result = paginate(db, query, params)
+    return Page[FacultyOut](
+        items=[_faculty_out(db, professor) for professor in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
 @router.get("/students", response_model=Page[StudentOptionOut])
 def list_students(
     db: DB_Dependency,
@@ -818,6 +1088,7 @@ def create_course(
         code=payload.code,
         name=payload.name,
         credits=payload.credits,
+        course_type=payload.course_type,
         department_id=payload.department_id,
         description=payload.description,
         created_at=utcnow(),
@@ -994,6 +1265,7 @@ def list_classes(
     course_id: str | None = None,
     professor_id: str | None = None,
     department_id: str | None = None,
+    semester_id: str | None = None,
     is_active: bool | None = None,
     search: str | None = Query(None, max_length=100),
     sort_by: Literal["section", "term", "created_at"] = "created_at",
@@ -1007,11 +1279,21 @@ def list_classes(
         query = query.where(Class_.professor_id == professor_id)
     if department_id:
         query = query.where(Class_.department_id == department_id)
+    if semester_id:
+        query = query.where(Class_.semester_id == semester_id)
     if is_active is not None:
         query = query.where(Class_.is_active == is_active)
     if search:
         pattern = f"%{search}%"
-        query = query.where(or_(Class_.section.ilike(pattern), Class_.term.ilike(pattern), Class_.name.ilike(pattern)))
+        query = query.outerjoin(Semester, Semester.id == Class_.semester_id).where(
+            or_(
+                Class_.section.ilike(pattern),
+                Class_.term.ilike(pattern),
+                Class_.name.ilike(pattern),
+                Semester.name.ilike(pattern),
+                Semester.code.ilike(pattern),
+            )
+        )
     query = apply_sort(query, getattr(Class_, sort_by), params)
     result = paginate(db, query, params)
     return Page[ClassOut](
@@ -1023,26 +1305,30 @@ def list_classes(
     )
 
 
-def _validate_class_refs(db: Session, payload: Any) -> None:
+def _validate_class_refs(db: Session, payload: Any) -> Semester | None:
     _get_or_404(db, Course, payload.course_id, "Course")
     if payload.professor_id:
         _get_or_404(db, Professor, payload.professor_id, "Professor")
     if payload.department_id:
         _get_or_404(db, Department, payload.department_id, "Department")
+    if getattr(payload, "semester_id", None):
+        return _get_or_404(db, Semester, payload.semester_id, "Semester")
+    return None
 
 
 @router.post("/classes", response_model=ClassOut, status_code=status.HTTP_201_CREATED)
 def create_class(
     payload: ClassCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
 ) -> ClassOut:
-    _validate_class_refs(db, payload)
+    semester = _validate_class_refs(db, payload)
     class_ = Class_(
         id=new_uuid(),
         course_id=payload.course_id,
         professor_id=payload.professor_id,
         department_id=payload.department_id,
+        semester_id=semester.id if semester else None,
         section=payload.section,
-        term=payload.term,
+        term=payload.term or (semester.name if semester else ""),
         name=payload.name,
         capacity=payload.capacity,
         is_active=payload.is_active,
@@ -1087,7 +1373,13 @@ def update_class(
         _get_or_404(db, Course, payload.course_id, "Course")
     if payload.professor_id:
         _get_or_404(db, Professor, payload.professor_id, "Professor")
+    semester = None
+    if payload.semester_id:
+        semester = _get_or_404(db, Semester, payload.semester_id, "Semester")
     before = _apply(class_, payload)
+    if semester and "term" not in payload.model_fields_set:
+        before["term"] = class_.term
+        class_.term = semester.name
     class_.updated_at = utcnow()
     write_audit_log(
         db,
@@ -1122,6 +1414,127 @@ def delete_class(
         request=request,
     )
     db.delete(class_)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/classes/{class_id}/professors", response_model=list[ClassProfessorOut])
+def list_class_professors(class_id: str, db: DB_Dependency) -> list[ClassProfessorOut]:
+    class_ = _get_or_404(db, Class_, class_id, "Class")
+    rows = db.execute(
+        select(class_professors)
+        .where(class_professors.c.class_id == class_id)
+        .order_by(class_professors.c.created_at)
+    ).mappings().all()
+    result: list[ClassProfessorOut] = []
+    for row in rows:
+        professor = db.get(Professor, row["professor_id"])
+        if professor:
+            result.append(_class_professor_out(db, class_, professor, row["created_at"]))
+    return result
+
+
+@router.post(
+    "/classes/{class_id}/professors/{professor_id}",
+    response_model=ClassProfessorOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def assign_professor_to_class(
+    class_id: str,
+    professor_id: str,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> ClassProfessorOut:
+    class_ = _get_or_404(db, Class_, class_id, "Class")
+    professor = _get_or_404(db, Professor, professor_id, "Professor")
+    existing = db.execute(
+        select(class_professors).where(
+            class_professors.c.class_id == class_id,
+            class_professors.c.professor_id == professor_id,
+        )
+    ).first()
+    if existing:
+        raise AppError(409, "conflict", "Professor is already assigned to this class")
+    assigned_at = utcnow()
+    db.execute(
+        class_professors.insert().values(
+            class_id=class_id, professor_id=professor_id, created_at=assigned_at
+        )
+    )
+    primary_before = class_.professor_id
+    if class_.professor_id is None:
+        class_.professor_id = professor_id
+        class_.updated_at = assigned_at
+    write_audit_log(
+        db,
+        action="class_professor.assign",
+        entity_type="class_professor",
+        entity_id=professor_id,
+        actor=actor,
+        after={
+            "class_id": class_id,
+            "professor_id": professor_id,
+            "primary_before": primary_before,
+            "primary_after": class_.professor_id,
+        },
+        request=request,
+    )
+    db.commit()
+    return _class_professor_out(db, class_, professor, assigned_at)
+
+
+@router.delete(
+    "/classes/{class_id}/professors/{professor_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def unassign_professor_from_class(
+    class_id: str,
+    professor_id: str,
+    request: Request,
+    db: DB_Dependency,
+    actor: User = Depends(require_admin),
+) -> Response:
+    class_ = _get_or_404(db, Class_, class_id, "Class")
+    row = db.execute(
+        select(class_professors).where(
+            class_professors.c.class_id == class_id,
+            class_professors.c.professor_id == professor_id,
+        )
+    ).first()
+    if row is None:
+        raise AppError(404, "not_found", "Class professor assignment not found")
+    db.execute(
+        class_professors.delete().where(
+            class_professors.c.class_id == class_id,
+            class_professors.c.professor_id == professor_id,
+        )
+    )
+    primary_before = class_.professor_id
+    if class_.professor_id == professor_id:
+        replacement = db.execute(
+            select(class_professors.c.professor_id)
+            .where(
+                class_professors.c.class_id == class_id,
+                class_professors.c.professor_id != professor_id,
+            )
+            .order_by(class_professors.c.created_at)
+        ).scalar()
+        class_.professor_id = replacement
+        class_.updated_at = utcnow()
+    write_audit_log(
+        db,
+        action="class_professor.unassign",
+        entity_type="class_professor",
+        entity_id=professor_id,
+        actor=actor,
+        before={
+            "class_id": class_id,
+            "professor_id": professor_id,
+            "primary_before": primary_before,
+            "primary_after": class_.professor_id,
+        },
+        request=request,
+    )
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

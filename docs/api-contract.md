@@ -44,28 +44,54 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 | POST | `/admin/users/{id}/reset-password` | Reset a professor/student password and revoke active refresh sessions |
 | GET | `/admin/professors` | Professor options keyed by professor profile ID |
 | GET | `/admin/students` | Student options keyed by student profile ID |
+| GET, POST | `/admin/semesters` | List/create semesters; only one can be active |
+| GET, PATCH, DELETE | `/admin/semesters/{id}` | Manage semester; referenced semesters cannot be deleted |
+| GET | `/admin/faculty` | Faculty roster with course and class counts |
 | GET, POST | `/admin/courses` | List/create courses; `department_id` is required |
 | GET, PATCH, DELETE | `/admin/courses/{id}` | Manage course |
 | GET, POST, DELETE | `/admin/courses/{id}/professors` | List/assign/unassign professors for a course |
-| GET, POST | `/admin/classes` | List/create class sections; `professor_id` is a professor profile ID |
+| GET, POST | `/admin/classes` | List/create class sections; `professor_id` is the primary professor profile ID |
 | GET, PATCH, DELETE | `/admin/classes/{id}` | Manage class section |
+| GET, POST | `/admin/classes/{id}/professors` | List/add professors with access to a class |
+| DELETE | `/admin/classes/{id}/professors/{professor_id}` | Remove a professor from a class |
 | POST | `/admin/classes/{id}/enrollments` | Enroll a student; `student_id` is a student profile ID |
 | DELETE | `/admin/classes/{id}/enrollments/{student_id}` | Unenroll a student |
-| GET, POST | `/admin/schedules` | List/create weekly timetable entries |
-| GET, PATCH, DELETE | `/admin/schedules/{id}` | Manage weekly timetable entry |
+| GET, POST | `/admin/schedules` | List/create legacy weekly timetable entries |
+| GET, PATCH, DELETE | `/admin/schedules/{id}` | Manage legacy weekly timetable entry |
+| GET | `/admin/timetable` | Materialized timetable entries with `view=day\|week\|month\|list` and filters |
+| GET | `/admin/timetable/summary` | Schedule rule, today/upcoming class, and conflict counts |
+| GET | `/admin/timetable/conflicts` | Current conflicts across all schedule rules |
+| POST | `/admin/timetable/schedules` | Create a recurring schedule group |
+| GET, PATCH, DELETE | `/admin/timetable/schedules/{id}` | Manage a recurring schedule group |
+| POST | `/admin/schedules/check-conflicts` | Validate a proposed rule without saving it |
+| GET, POST | `/admin/subjects` | List/create subjects with semester and faculty links |
+| GET, PATCH, DELETE | `/admin/subjects/{id}` | Manage subject and its links |
+| PUT | `/admin/subjects/{id}/semesters` | Replace eligible semesters |
+| PUT | `/admin/subjects/{id}/professors` | Replace eligible faculty |
+| GET, POST | `/admin/classrooms` | List/create classrooms with capacity and room type |
+| GET, PATCH, DELETE | `/admin/classrooms/{id}` | Manage classroom |
+| GET, POST | `/admin/holidays` | List/create academic holidays and closures |
+| GET, PATCH, DELETE | `/admin/holidays/{id}` | Manage holiday |
+| GET | `/admin/departments/{id}/details` | Department teachers, subjects, classes, and semesters |
+| GET, PATCH | `/admin/faculty/{id}` | Faculty detail/update |
+| GET | `/admin/faculty/{id}/classes` | Classes assigned to a faculty member |
+| GET | `/admin/faculty/{id}/timetable` | Timetable for a faculty member |
 | GET | `/admin/face/status/{student_id}` | Registration status; accepts a student profile ID or its user ID |
 | POST | `/admin/face/register/{student_id}` | Register a student's face with explicit admin-recorded consent; accepts a student profile ID or its user ID |
 | GET | `/admin/audit-logs` | Query modification history |
 
-Professor and student option endpoints return profile IDs, not user account IDs; use those IDs for course assignments, class sections, and enrollments. Course-professor assignments are catalog metadata; attendance permissions remain scoped by the professor assigned to a class section.
+Professor and student option endpoints return profile IDs, not user account IDs; use those IDs for course assignments, class sections, and enrollments. Course-professor assignments are catalog metadata; attendance permissions are scoped by the class section's primary professor plus any professor in `/admin/classes/{id}/professors`.
 
-Weekly timetable entries use `day_of_week` `0=Monday` through `6=Sunday`, plus `start_time`, `end_time`, and an optional `classroom_id`; the pair `(class_id, day_of_week, start_time)` is unique. `end_time` must be later than `start_time`. Student-facing timetable data is read-only.
+Class sections require a `semester_id` or a `term`; when both are supplied the semester name is used as the normalized term. `GET /semesters` returns semester options for selectors. Semester date ranges are validated, and activating a semester deactivates all others.
+
+Legacy weekly timetable entries use `day_of_week` `0=Monday` through `6=Sunday`, plus `start_time`, `end_time`, and an optional `classroom_id`; the pair `(class_id, day_of_week, start_time)` is unique. `end_time` must be later than `start_time`. The full timetable module adds `recurrence_type` (`one_time`, `daily`, `weekly`, `monthly`, `custom`, `semester`), `days_of_week`, `start_date`/`end_date`, `custom_dates`, `holiday_dates`, `exclude_holidays`, `monthly_mode`, `class_type`, and optional department/semester/subject/faculty/room IDs. Multiple weekdays create multiple schedule rows sharing a `schedule_group_id`; edits and deletes apply to the whole group. Occurrences are materialized on read, so student-facing schedule data continues to read the underlying `schedules` table. Blocking conflicts are teacher, classroom, student-group, and semester-range overlaps; capacity shortfalls are warnings. `POST /admin/schedules/check-conflicts` returns `{ valid, conflicts, occurrence_count }` without saving.
 
 ## Academic shared endpoints
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | GET | `/departments` | authenticated | Department options |
+| GET | `/semesters` | authenticated | Semester options with active/current flags |
 | GET | `/courses` | authenticated | Course options |
 | GET | `/classrooms` | authenticated | Classroom options with location config |
 | GET | `/professor/classes` | professor | Assigned classes |

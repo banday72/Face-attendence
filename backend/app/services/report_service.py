@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.schemas.attendance import AttendanceMethod, AttendanceStatus
 from app.schemas.reports import ReportPeriod, ReportRecordOut
+from app.services.class_service import professor_class_filter
 from app.utils.uuid import utcnow
 
 ReportFormat = Literal["xlsx", "pdf"]
@@ -86,9 +87,9 @@ def records_query(db: Session, filters: ReportFilters) -> Select:
     if filters.student_id:
         conditions.append(AttendanceRecord.student_id == filters.student_id)
     if filters.professor_id:
-        conditions.append(Class_.professor_id == filters.professor_id)
+        conditions.append(professor_class_filter(filters.professor_id))
     if filters.scope_professor_id:
-        conditions.append(Class_.professor_id == filters.scope_professor_id)
+        conditions.append(professor_class_filter(filters.scope_professor_id))
     if filters.status:
         conditions.append(AttendanceRecord.status == filters.status)
     if filters.from_date:

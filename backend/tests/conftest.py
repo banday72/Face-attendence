@@ -30,6 +30,7 @@ from app.models import (
     Department,
     Enrollment,
     Professor,
+    Semester,
     Student,
     User,
 )
@@ -140,6 +141,15 @@ def create_academic_data(db: Session) -> dict[str, object]:
         created_at=utcnow(),
         updated_at=utcnow(),
     )
+    semester = Semester(
+        id=new_uuid(),
+        name="Fall 2026",
+        code="F2026",
+        academic_year="2026",
+        is_active=True,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
     classroom = Classroom(
         id=new_uuid(),
         name="Lab A",
@@ -151,7 +161,7 @@ def create_academic_data(db: Session) -> dict[str, object]:
         created_at=utcnow(),
         updated_at=utcnow(),
     )
-    db.add_all([department, course, classroom])
+    db.add_all([department, course, classroom, semester])
     db.flush()
 
     professor_user = create_user(
@@ -190,8 +200,9 @@ def create_academic_data(db: Session) -> dict[str, object]:
         course_id=course.id,
         professor_id=professor.id,
         department_id=department.id,
+        semester_id=semester.id,
         section="A",
-        term="Fall-2026",
+        term="Fall 2026",
         capacity=30,
         is_active=True,
         created_at=utcnow(),
@@ -214,6 +225,7 @@ def create_academic_data(db: Session) -> dict[str, object]:
         "department": department,
         "course": course,
         "classroom": classroom,
+        "semester": semester,
         "class": class_,
         "professor_user": professor_user,
         "professor": professor,
