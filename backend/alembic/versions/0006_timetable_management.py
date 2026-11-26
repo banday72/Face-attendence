@@ -43,6 +43,13 @@ def _add_foreign_key(table: str, name: str, column: str, target: str) -> None:
     op.create_foreign_key(op.f(name), table, target, [column], ["id"], ondelete="SET NULL")
 
 
+def _drop_index_if_exists(name: str, table_name: str) -> None:
+    connection = op.get_bind()
+    indexes = sa.inspect(connection).get_indexes(table_name)
+    if any(index["name"] == name for index in indexes):
+        op.drop_index(name, table_name=table_name)
+
+
 def _make_required(table: str, column: str, column_type: sa.types.TypeEngine, default: object) -> None:
     connection = op.get_bind()
     if connection.dialect.name == "sqlite":
@@ -62,10 +69,11 @@ def upgrade() -> None:
     for column_name, column_type in SCHEDULE_COLUMNS:
         op.add_column("schedules", sa.Column(column_name, column_type, nullable=True))
 
+    false_value = "FALSE" if connection.dialect.name != "sqlite" else "0"
     op.execute(
         text(
             "UPDATE schedules SET recurrence_type = 'weekly', "
-            "class_type = 'Lecture', exclude_holidays = 0 "
+            f"class_type = 'Lecture', exclude_holidays = {false_value} "
             "WHERE recurrence_type IS NULL"
         )
     )
@@ -89,7 +97,7 @@ def upgrade() -> None:
     _add_foreign_key("schedules", "fk_schedules_course_id_courses", "course_id", "courses")
     _add_foreign_key("schedules", "fk_schedules_professor_id_professors", "professor_id", "professors")
 
-    op.drop_index("uq_semesters_single_active", table_name="semesters")
+    _drop_index_if_exists("uq_semesters_single_active", "semesters")
     op.add_column("semesters", sa.Column("number", sa.Integer(), nullable=True))
     op.add_column("semesters", sa.Column("department_id", sa.String(length=36), nullable=True))
     op.add_column("semesters", sa.Column("program", sa.String(length=120), nullable=True))
