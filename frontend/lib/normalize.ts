@@ -2,6 +2,7 @@ import type {
   AdminDashboard,
   AttendanceRecord,
   AttendanceStatus,
+  AttendanceSummary,
   AuditLog,
   Classroom,
   ClassItem,
@@ -312,6 +313,19 @@ export function normalizeRosterEntry(value: unknown): RosterEntry {
       pick(raw, ["student_name"]) || pick(student, ["full_name", "name"], "Student"),
     enrollment_status: pick(raw, ["enrollment_status", "status"], "enrolled"),
     record: isRecord(raw.record) ? normalizeAttendance(raw.record) : undefined,
+  };
+}
+
+export function normalizeRosterRecord(value: unknown): AttendanceRecord {
+  const entry = normalizeRosterEntry(value);
+  const record = entry.record;
+  return {
+    ...(record ?? {}),
+    id: record?.id ?? "",
+    student_id: entry.student_id,
+    student_name: entry.student_name,
+    university_id: entry.university_id,
+    status: record?.status ?? "absent",
   };
 }
 
@@ -633,7 +647,8 @@ export function normalizeAttendance(value: unknown): AttendanceRecord {
     class_id:
       idOf(raw.class) || pick(raw, ["class_id"]) || pick(session, ["class_id"]),
     class_name:
-      pick(raw, ["class_name"]) || pick(classRaw, ["name", "class_name"]),
+      pick(raw, ["class_name", "class_section"]) ||
+      pick(classRaw, ["name", "class_name", "section"]),
     course_id: idOf(raw.course) || pick(raw, ["course_id"]),
     course_name:
       pick(raw, ["course_name"]) || pick(course, ["name", "course_name"]),
@@ -707,7 +722,7 @@ function toTrendPoints(value: unknown): TrendPoint[] {
   return arr(value).map((item, index) => {
     if (isRecord(item)) {
       return {
-        label: pick(item, ["label", "date", "day", "name", "period", "week"], `P${index + 1}`),
+        label: pick(item, ["label", "date", "day", "name", "period", "week", "group"], `P${index + 1}`),
         value: pickNumber(item, ["value", "count", "percentage", "attendance_rate", "total"]),
       };
     }
@@ -727,7 +742,7 @@ function toNameValues(value: unknown): NameValue[] {
   return arr(value).map((item, index) => {
     if (isRecord(item)) {
       return {
-        name: pick(item, ["name", "label", "status", "department", "course"], `Item ${index + 1}`),
+        name: pick(item, ["name", "label", "status", "department", "course", "group"], `Item ${index + 1}`),
         value: pickNumber(item, ["value", "count", "percentage", "total", "attendance_rate"]),
       };
     }
@@ -746,26 +761,36 @@ function flatten(value: unknown): Raw {
   };
 }
 
+function toPercentage(value: unknown, fallback = 0): number {
+  const parsed = num(value, Number.NaN);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed >= 0 && parsed <= 1) return Math.round(parsed * 1000) / 10;
+  return parsed;
+}
+
 export function normalizeAdminDashboard(value: unknown): AdminDashboard {
   const raw = flatten(value);
+  const counts = toRaw(raw.counts);
+  const attendance = toRaw(raw.attendance);
   const schedulingRaw = isRecord(raw.scheduling) ? raw.scheduling : {};
   return {
     scheduling: Object.fromEntries(
       Object.entries(schedulingRaw).map(([key, item]) => [key, num(item)]),
     ),
-    total_users: pickNumber(raw, ["total_users", "users_count", "users"]),
-    total_students: pickNumber(raw, ["total_students", "students_count", "students"]),
-    total_professors: pickNumber(raw, ["total_professors", "professors_count"]),
-    total_departments: pickNumber(raw, ["total_departments", "departments_count"]),
-    total_courses: pickNumber(raw, ["total_courses", "courses_count"]),
-    total_classes: pickNumber(raw, ["total_classes", "classes_count"]),
-    total_sessions: pickNumber(raw, ["total_sessions", "sessions_count"]),
-    attendance_rate: pickNumber(raw, [
-      "attendance_rate",
-      "overall_attendance_rate",
-      "average_attendance",
-      "attendance_percentage",
-    ]),
+    total_users: pickNumber(counts, ["users", "total_users"], pickNumber(raw, ["total_users", "users_count"])),
+    total_students: pickNumber(counts, ["students", "total_students"], pickNumber(raw, ["total_students", "students_count"])),
+    total_professors: pickNumber(counts, ["professors", "total_professors"], pickNumber(raw, ["total_professors", "professors_count"])),
+    total_departments: pickNumber(counts, ["departments", "total_departments"], pickNumber(raw, ["total_departments", "departments_count"])),
+    total_courses: pickNumber(counts, ["courses", "total_courses"], pickNumber(raw, ["total_courses", "courses_count"])),
+    total_classes: pickNumber(counts, ["classes", "total_classes"], pickNumber(raw, ["total_classes", "classes_count"])),
+    total_sessions: pickNumber(counts, ["sessions", "total_sessions"], pickNumber(raw, ["total_sessions", "sessions_count", "active_sessions"])),
+    attendance_rate: toPercentage(
+      attendance.attendance_rate ??
+        raw.attendance_rate ??
+        raw.overall_attendance_rate ??
+        raw.average_attendance ??
+        raw.attendance_percentage,
+    ),
     trend: toTrendPoints(raw.attendance_trend ?? raw.trend ?? raw.daily_attendance),
     status_distribution: toNameValues(
       raw.status_distribution ?? raw.attendance_distribution ?? raw.status_counts,
@@ -781,17 +806,20 @@ export function normalizeAdminDashboard(value: unknown): AdminDashboard {
 
 export function normalizeProfessorDashboard(value: unknown): ProfessorDashboard {
   const raw = flatten(value);
+  const counts = toRaw(raw.counts);
+  const attendance = toRaw(raw.attendance);
   return {
-    assigned_courses: pickNumber(raw, ["assigned_courses", "total_courses", "courses_count"]),
-    assigned_classes: pickNumber(raw, ["assigned_classes", "total_classes", "classes_count"]),
-    total_students: pickNumber(raw, ["total_students", "students_count"]),
-    total_sessions: pickNumber(raw, ["total_sessions", "sessions_count"]),
-    attendance_rate: pickNumber(raw, [
-      "attendance_rate",
-      "overall_attendance_rate",
-      "average_attendance",
-      "attendance_percentage",
-    ]),
+    assigned_courses: pickNumber(counts, ["courses", "assigned_courses"], pickNumber(raw, ["assigned_courses", "total_courses", "courses_count"])),
+    assigned_classes: pickNumber(counts, ["classes", "assigned_classes"], pickNumber(raw, ["assigned_classes", "total_classes", "classes_count"])),
+    total_students: pickNumber(counts, ["students", "total_students"], pickNumber(raw, ["total_students", "students_count"])),
+    total_sessions: pickNumber(counts, ["sessions", "total_sessions"], pickNumber(raw, ["total_sessions", "sessions_count"])),
+    attendance_rate: toPercentage(
+      attendance.attendance_rate ??
+        raw.attendance_rate ??
+        raw.overall_attendance_rate ??
+        raw.average_attendance ??
+        raw.attendance_percentage,
+    ),
     trend: toTrendPoints(raw.attendance_trend ?? raw.trend ?? raw.daily_attendance),
     class_attendance: toNameValues(
       raw.class_attendance ?? raw.by_class ?? raw.classes,
@@ -808,13 +836,15 @@ export function normalizeProfessorDashboard(value: unknown): ProfessorDashboard 
 
 export function normalizeStudentDashboard(value: unknown): StudentDashboard {
   const raw = flatten(value);
+  const totals = toRaw(raw.totals);
   return {
-    overall_percentage: pickNumber(raw, [
-      "overall_percentage",
-      "attendance_percentage",
-      "attendance_rate",
-      "overall_attendance",
-    ]),
+    overall_percentage: toPercentage(
+      totals.average_percentage ??
+        raw.overall_percentage ??
+        raw.attendance_percentage ??
+        raw.attendance_rate ??
+        raw.overall_attendance,
+    ),
     enrolled_courses: arr(raw.enrolled_courses ?? raw.courses ?? raw.percentages).map(
       normalizeCourseProgress,
     ),
@@ -831,41 +861,62 @@ export function normalizeStudentDashboard(value: unknown): StudentDashboard {
   };
 }
 
-export function normalizeAttendanceSummary(value: unknown) {
+export function normalizeAttendanceSummary(value: unknown): AttendanceSummary {
   const raw = flatten(value);
-  const recordsSource =
-    raw.records ??
-    raw.history ??
-    raw.items ??
-    (isRecord(raw.data) ? raw.data.items ?? raw.data.records : undefined);
+  const percentages = arr(raw.percentages ?? raw.courses ?? raw.course_percentages).map(
+    normalizeCourseProgress,
+  );
+  const total = percentages.reduce((sum, item) => sum + item.total, 0);
+  const attended = percentages.reduce((sum, item) => sum + item.present + item.late, 0);
+  const computed = total > 0 ? Math.round((attended / total) * 100) : 0;
+  const overallRaw = raw.overall_percentage ?? raw.attendance_percentage ?? raw.attendance_rate;
   return {
-    overall_percentage: pickNumber(raw, [
-      "overall_percentage",
-      "attendance_percentage",
-      "attendance_rate",
-    ]),
-    percentages: arr(raw.percentages ?? raw.courses ?? raw.course_percentages).map(
-      normalizeCourseProgress,
-    ),
-    records: normalizePaginated(recordsSource, normalizeAttendance),
+    overall_percentage: Number.isFinite(num(overallRaw, Number.NaN))
+      ? toPercentage(overallRaw, computed)
+      : computed,
+    percentages,
+    records: normalizePaginated(value, normalizeAttendance),
   };
 }
 
 export function normalizeReportSummary(value: unknown): ReportSummary {
   const raw = flatten(value);
+  const byStatus = toRaw(raw.by_status ?? raw.status_counts ?? raw.counts);
+  const period = pick(raw, ["period", "group_by"], "").toLowerCase();
+  const isPeriod = ["daily", "weekly", "monthly"].includes(period);
+  const groups = arr(raw.groups ?? raw.by_group ?? raw.grouped).map((item, index) => {
+    const group = toRaw(item);
+    return {
+      label: pick(group, ["group", "label", "name", "course_name", "department_name"], `Group ${index + 1}`),
+      value: toPercentage(
+        group.attendance_rate ?? group.percentage ?? group.rate ?? group.value ?? 0,
+      ),
+    };
+  });
+  const groupNames = groups.map((group) => ({ name: group.label, value: group.value }));
   return {
     total_records: pickNumber(raw, ["total_records", "total", "records_count"]),
-    average_attendance: pickNumber(raw, [
-      "average_attendance",
-      "attendance_rate",
-      "attendance_percentage",
-    ]),
-    present: pickNumber(raw, ["present", "present_count"]),
-    late: pickNumber(raw, ["late", "late_count"]),
-    absent: pickNumber(raw, ["absent", "absent_count"]),
-    by_period: toTrendPoints(raw.by_period ?? raw.trend ?? raw.daily),
-    by_course: toNameValues(raw.by_course ?? raw.courses),
-    by_department: toNameValues(raw.by_department ?? raw.departments),
+    average_attendance: toPercentage(
+      raw.attendance_rate ?? raw.average_attendance ?? raw.attendance_percentage,
+    ),
+    present: pickNumber(byStatus, ["present", "present_count"], pickNumber(raw, ["present", "present_count"])),
+    late: pickNumber(byStatus, ["late", "late_count"], pickNumber(raw, ["late", "late_count"])),
+    absent: pickNumber(byStatus, ["absent", "absent_count"], pickNumber(raw, ["absent", "absent_count"])),
+    by_period: isPeriod
+      ? groups
+      : toTrendPoints(raw.by_period ?? raw.trend ?? raw.daily ?? groups),
+    by_course:
+      !isPeriod && period !== "department"
+        ? groupNames.length > 0
+          ? groupNames
+          : toNameValues(raw.by_course ?? raw.courses)
+        : toNameValues(raw.by_course ?? raw.courses),
+    by_department:
+      period === "department"
+        ? groupNames.length > 0
+          ? groupNames
+          : toNameValues(raw.by_department ?? raw.departments)
+        : toNameValues(raw.by_department ?? raw.departments),
   };
 }
 
@@ -874,14 +925,27 @@ export function normalizeAuditLog(value: unknown): AuditLog {
   const actor = toRaw(raw.actor);
   return {
     id: pick(raw, ["id", "log_id"]),
-    actor_id: idOf(raw.actor) || pick(raw, ["actor_id", "user_id"]),
+    actor_id:
+      idOf(raw.actor) ||
+      pick(raw, ["actor_user_id", "actor_id", "user_id"]) ||
+      idOf(toRaw(raw.user)),
     actor_name:
-      pick(raw, ["actor_name", "user_name"]) || pick(actor, ["full_name", "name"]),
+      pick(raw, ["actor_name", "user_name"]) ||
+      pick(actor, ["full_name", "name"]) ||
+      pick(toRaw(raw.user), ["full_name", "name"]),
     action: pick(raw, ["action", "event", "operation"]),
     entity_type: pick(raw, ["entity_type", "resource", "table_name"]),
     entity_id: pick(raw, ["entity_id", "object_id", "record_id"]),
-    before: isRecord(raw.before) ? raw.before : undefined,
-    after: isRecord(raw.after) ? raw.after : undefined,
+    before: isRecord(raw.before)
+      ? raw.before
+      : isRecord(raw.before_json)
+        ? raw.before_json
+        : undefined,
+    after: isRecord(raw.after)
+      ? raw.after
+      : isRecord(raw.after_json)
+        ? raw.after_json
+        : undefined,
     reason: pick(raw, ["reason"]),
     ip_address: pick(raw, ["ip_address", "ip"]),
     created_at: pick(raw, ["created_at", "timestamp"]),

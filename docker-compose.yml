@@ -32,8 +32,6 @@ services:
       uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
-    volumes:
-      - face_models:/home/appuser/.insightface
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,4 +56,3 @@ services:
 
 volumes:
   postgres_data:
-  face_models:

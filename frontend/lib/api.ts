@@ -290,6 +290,39 @@ export const api = {
       normalizePaginated(payload, mapper),
     );
   },
+  async getAll<T>(
+    path: string,
+    mapper: (item: unknown) => T,
+    options: Omit<ApiRequestOptions, "method" | "body"> & {
+      pageSize?: number;
+      maxPages?: number;
+    } = {},
+  ): Promise<T[]> {
+    const { pageSize = 100, maxPages = 100, query, ...requestOptions } = options;
+    const items: T[] = [];
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      const result = normalizePaginated(
+        await apiRequest<unknown>(path, {
+          ...requestOptions,
+          method: "GET",
+          query: { ...query, page, page_size: pageSize },
+        }),
+        mapper,
+      );
+      items.push(...result.items);
+      if (
+        !result.items.length ||
+        result.items.length < pageSize ||
+        page >= result.pages ||
+        items.length >= result.total
+      ) {
+        break;
+      }
+    }
+
+    return items;
+  },
   async download(
     path: string,
     filename: string,

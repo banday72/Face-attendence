@@ -56,9 +56,9 @@ import { api, errorMessage } from "@/lib/api";
 import { LIVE_REFRESH_MS } from "@/lib/constants";
 import { useResource } from "@/lib/hooks";
 import {
-  normalizeAttendance,
   normalizePaginated,
   normalizeQrPayload,
+  normalizeRosterRecord,
   normalizeSession,
 } from "@/lib/normalize";
 import type {
@@ -96,7 +96,7 @@ export default function SessionMonitorPage() {
     ]);
     return {
       session: normalizeSession(sessionPayload),
-      roster: normalizePaginated(rosterPayload, normalizeAttendance),
+      roster: normalizePaginated(rosterPayload, normalizeRosterRecord),
     };
   }, [page, sessionId]);
   const monitor = useResource(loader);

@@ -302,6 +302,7 @@ def dashboard(db: DB_Dependency) -> DashboardOut:
         "departments": int(db.scalar(select(func.count()).select_from(Department)) or 0),
         "courses": int(db.scalar(select(func.count()).select_from(Course)) or 0),
         "classes": int(db.scalar(select(func.count()).select_from(Class_)) or 0),
+        "sessions": int(db.scalar(select(func.count()).select_from(AttendanceSession)) or 0),
         "active_sessions": int(
             db.scalar(select(func.count()).select_from(AttendanceSession).where(AttendanceSession.status == "active"))
             or 0

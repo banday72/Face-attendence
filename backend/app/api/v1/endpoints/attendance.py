@@ -270,6 +270,15 @@ def professor_dashboard(db: DB_Dependency, user: User = Depends(require_professo
     session_ids = select(AttendanceSession.id).where(AttendanceSession.class_id.in_(class_ids))
     counts = {
         "classes": int(db.scalar(select(func.count()).select_from(Class_).where(professor_filter)) or 0),
+        "courses": int(db.scalar(select(func.count(Class_.course_id.distinct())).where(professor_filter)) or 0),
+        "students": int(
+            db.scalar(
+                select(func.count(Enrollment.student_id.distinct())).where(
+                    Enrollment.class_id.in_(class_ids), Enrollment.status == "enrolled"
+                )
+            )
+            or 0
+        ),
         "sessions": int(db.scalar(select(func.count()).select_from(AttendanceSession).where(AttendanceSession.class_id.in_(class_ids))) or 0),
         "active_sessions": int(
             db.scalar(

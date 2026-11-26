@@ -124,25 +124,17 @@ export default function ClassesPage() {
 
   const optionsLoader = useCallback(async () => {
     const [courses, professors, departments, semesters] = await Promise.all([
-      api.get<unknown>("/courses"),
-      api.get<unknown>("/admin/professors", { query: { page_size: 100 } }),
-      api.get<unknown>("/departments", { query: { page_size: 100 } }),
-      api.get<unknown>("/semesters", { query: { page_size: 100 } }),
+      api.getAll("/courses", normalizeCourse),
+      api.getAll("/admin/professors", normalizeProfessorOption),
+      api.getAll("/departments", normalizeDepartment),
+      api.getAll("/semesters", normalizeSemester),
     ]);
-    return {
-      courses: normalizePaginated(courses, normalizeCourse).items,
-      professors: normalizePaginated(professors, normalizeProfessorOption).items,
-      departments: normalizePaginated(departments, normalizeDepartment).items,
-      semesters: normalizePaginated(semesters, normalizeSemester).items,
-    };
+    return { courses, professors, departments, semesters };
   }, []);
   const options = useResource(optionsLoader);
 
   const studentOptionsLoader = useCallback(
-    () =>
-      api
-        .get<unknown>("/admin/students", { query: { page_size: 100 } })
-        .then((payload) => normalizePaginated(payload, normalizeStudentOption).items),
+    () => api.getAll("/admin/students", normalizeStudentOption),
     [],
   );
   const studentOptions = useResource<StudentOption[]>(studentOptionsLoader, Boolean(enrollmentClass));

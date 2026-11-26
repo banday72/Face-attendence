@@ -125,11 +125,11 @@ function SessionsContent() {
 
   const optionsLoader = useCallback(async () => {
     const [classes, classrooms] = await Promise.all([
-      api.get<unknown>("/professor/classes", { query: { page_size: 200 } }),
+      api.getAll("/professor/classes", normalizeClass),
       api.get<unknown>("/classrooms"),
     ]);
     return {
-      classes: normalizePaginated(classes, normalizeClass).items,
+      classes,
       classrooms: normalizePaginated(classrooms, normalizeClassroom).items,
     };
   }, []);

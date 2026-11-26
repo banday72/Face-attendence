@@ -11,7 +11,12 @@ from slowapi.util import get_remote_address
 from app.core.config import settings
 from app.core.errors import error_response
 
-limiter = Limiter(key_func=get_remote_address, default_limits=[], headers_enabled=True, storage_uri="memory://")
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    headers_enabled=True,
+    storage_uri=settings.rate_limit_storage_uri,
+)
 
 login_limit = limiter.limit("5/minute", methods=["POST"])
 refresh_limit = limiter.limit("10/minute", methods=["POST"])

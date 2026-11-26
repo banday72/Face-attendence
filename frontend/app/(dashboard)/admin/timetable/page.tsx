@@ -55,7 +55,6 @@ import {
   normalizeClassroom,
   normalizeDepartment,
   normalizeFacultyMember,
-  normalizePaginated,
   normalizeScheduleGroup,
   normalizeSemester,
   normalizeSubject,
@@ -234,24 +233,22 @@ export default function AdminTimetablePage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [dateDraft, setDateDraft] = useState("");
 
-  const timetableLoader = useCallback(
-    () =>
-      api.getPaginated<TimetableEntry>("/admin/timetable", normalizeTimetableEntry, {
-        query: {
-          view,
-          from_date: anchor,
-          to_date: view === "list" ? shiftDate(anchor, 30) : undefined,
-          department_id: departmentId || undefined,
-          semester_id: semesterId || undefined,
-          professor_id: professorId || undefined,
-          course_id: courseId || undefined,
-          classroom_id: classroomId || undefined,
-          class_type: classType || undefined,
-          page_size: 500,
-        },
-      }),
-    [anchor, classType, classroomId, courseId, departmentId, professorId, semesterId, view],
-  );
+  const timetableLoader = useCallback(async () => {
+    const items = await api.getAll<TimetableEntry>("/admin/timetable", normalizeTimetableEntry, {
+      query: {
+        view,
+        from_date: anchor,
+        to_date: view === "list" ? shiftDate(anchor, 30) : undefined,
+        department_id: departmentId || undefined,
+        semester_id: semesterId || undefined,
+        professor_id: professorId || undefined,
+        course_id: courseId || undefined,
+        classroom_id: classroomId || undefined,
+        class_type: classType || undefined,
+      },
+    });
+    return { items, total: items.length, page: 1, page_size: items.length || 100, pages: 1 };
+  }, [anchor, classType, classroomId, courseId, departmentId, professorId, semesterId, view]);
   const timetable = useResource(timetableLoader);
 
   const summaryLoader = useCallback(
@@ -271,21 +268,14 @@ export default function AdminTimetablePage() {
 
   const optionsLoader = useCallback(async () => {
     const [departments, semesters, faculty, subjects, classrooms, classes] = await Promise.all([
-      api.get<unknown>("/admin/departments", { query: { page_size: 200 } }),
-      api.get<unknown>("/admin/semesters", { query: { page_size: 200 } }),
-      api.get<unknown>("/admin/faculty", { query: { page_size: 200 } }),
-      api.get<unknown>("/admin/subjects", { query: { page_size: 200 } }),
-      api.get<unknown>("/admin/classrooms", { query: { page_size: 200 } }),
-      api.get<unknown>("/admin/classes", { query: { page_size: 200 } }),
+      api.getAll("/admin/departments", normalizeDepartment),
+      api.getAll("/admin/semesters", normalizeSemester),
+      api.getAll("/admin/faculty", normalizeFacultyMember),
+      api.getAll("/admin/subjects", normalizeSubject),
+      api.getAll("/admin/classrooms", normalizeClassroom),
+      api.getAll("/admin/classes", normalizeClass),
     ]);
-    return {
-      departments: normalizePaginated(departments, normalizeDepartment).items,
-      semesters: normalizePaginated(semesters, normalizeSemester).items,
-      faculty: normalizePaginated(faculty, normalizeFacultyMember).items,
-      subjects: normalizePaginated(subjects, normalizeSubject).items,
-      classrooms: normalizePaginated(classrooms, normalizeClassroom).items,
-      classes: normalizePaginated(classes, normalizeClass).items,
-    };
+    return { departments, semesters, faculty, subjects, classrooms, classes };
   }, []);
   const options = useResource(optionsLoader);
 

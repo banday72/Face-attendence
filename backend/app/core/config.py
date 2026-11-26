@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     allowed_classroom_radius_meters: float = 150.0
 
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    rate_limit_storage_uri: str = "memory://"
     rate_limit_per_minute: int = 60
     environment: Literal["development", "test", "staging", "production"] = "development"
     biometric_consent_version: str = "1.0"

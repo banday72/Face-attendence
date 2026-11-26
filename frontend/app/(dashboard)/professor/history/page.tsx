@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
-import { normalizeAttendance, normalizeClass, normalizePaginated } from "@/lib/normalize";
+import { normalizeAttendance, normalizeClass } from "@/lib/normalize";
 import { formatDateTime } from "@/lib/utils";
 
 export default function ProfessorHistoryPage() {
@@ -57,13 +57,7 @@ export default function ProfessorHistoryPage() {
     [classId, debouncedSearch, fromDate, page, status, toDate],
   );
   const resource = useResource(loader);
-  const classesLoader = useCallback(
-    () =>
-      api
-        .get<unknown>("/professor/classes", { query: { page_size: 200 } })
-        .then((payload) => normalizePaginated(payload, normalizeClass).items),
-    [],
-  );
+  const classesLoader = useCallback(() => api.getAll("/professor/classes", normalizeClass), []);
   const classes = useResource(classesLoader);
 
   return (

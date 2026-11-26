@@ -132,6 +132,7 @@ def record_to_report(record: AttendanceRecord) -> ReportRecordOut:
         location_status=record.location_status,
         face_status=record.face_status,
         is_manual=record.is_manual,
+        correction_reason=record.correction_reason,
     )
 
 

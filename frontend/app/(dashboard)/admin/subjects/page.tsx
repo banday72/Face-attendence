@@ -44,7 +44,6 @@ import { useDebouncedValue, useResource } from "@/lib/hooks";
 import {
   normalizeDepartment,
   normalizeFacultyMember,
-  normalizePaginated,
   normalizeSemester,
   normalizeSubject,
 } from "@/lib/normalize";
@@ -99,15 +98,11 @@ export default function AdminSubjectsPage() {
 
   const optionsLoader = useCallback(async () => {
     const [departments, semesters, faculty] = await Promise.all([
-      api.get<unknown>("/admin/departments", { query: { page_size: 200 } }),
-      api.get<unknown>("/admin/semesters", { query: { page_size: 200 } }),
-      api.get<unknown>("/admin/faculty", { query: { page_size: 200 } }),
+      api.getAll("/admin/departments", normalizeDepartment),
+      api.getAll("/admin/semesters", normalizeSemester),
+      api.getAll("/admin/faculty", normalizeFacultyMember),
     ]);
-    return {
-      departments: normalizePaginated(departments, normalizeDepartment).items,
-      semesters: normalizePaginated(semesters, normalizeSemester).items,
-      faculty: normalizePaginated(faculty, normalizeFacultyMember).items,
-    };
+    return { departments, semesters, faculty };
   }, []);
   const options = useResource(optionsLoader);
 

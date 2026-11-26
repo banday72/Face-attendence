@@ -19,9 +19,7 @@ venv/
 htmlcov/
 
 # Environment and local data
-.env
-.env.local
-.env.*.local
+.env*
 !**/.env.example
 *.db
 *.sqlite
@@ -33,4 +31,3 @@ htmlcov/
 Thumbs.db
 
 .vercel
-.env*

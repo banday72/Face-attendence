@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import { normalizePaginated, normalizeSchedule } from "@/lib/normalize";
+import { normalizeSchedule } from "@/lib/normalize";
 import type { ScheduleItem } from "@/lib/types";
 import { formatTime } from "@/lib/utils";
 
@@ -29,13 +29,7 @@ const dayNames: Record<string, string> = {
 };
 
 export default function StudentSchedulePage() {
-  const loader = useCallback(
-    () =>
-      api
-        .get<unknown>("/student/schedule", { query: { page_size: 200 } })
-        .then((payload) => normalizePaginated(payload, normalizeSchedule).items),
-    [],
-  );
+  const loader = useCallback(() => api.getAll("/student/schedule", normalizeSchedule), []);
   const resource = useResource(loader);
   const today = format(new Date(), "EEE");
 

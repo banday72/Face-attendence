@@ -23,8 +23,8 @@ services:
         value: "0"
       - key: TRUSTED_PROXY_IPS
         sync: false
-      - key: FACE_MODEL_NAME
-        value: face-api-v1
+      - key: RATE_LIMIT_STORAGE_URI
+        sync: false
       - key: DEFAULT_QR_VALIDITY_SECONDS
         value: "300"
       - key: QR_REFRESH_SECONDS

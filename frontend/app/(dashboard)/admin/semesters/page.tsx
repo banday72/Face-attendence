@@ -43,7 +43,6 @@ import { ApiError, api, errorMessage } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
 import {
   normalizeDepartment,
-  normalizePaginated,
   normalizeSemester,
 } from "@/lib/normalize";
 import type { Department, Semester } from "@/lib/types";
@@ -106,10 +105,7 @@ export default function SemestersPage() {
   const resource = useResource(loader);
 
   const departmentsLoader = useCallback(
-    () =>
-      api
-        .get<unknown>("/departments", { query: { page_size: 100 } })
-        .then((payload) => normalizePaginated(payload, normalizeDepartment).items),
+    () => api.getAll("/departments", normalizeDepartment),
     [],
   );
   const departments = useResource<Department[]>(departmentsLoader);

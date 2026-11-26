@@ -20,18 +20,6 @@
   },
   "rewrites": [
     {
-      "source": "/api/v1/face/status",
-      "destination": {
-        "service": "backend"
-      }
-    },
-    {
-      "source": "/api/v1/admin/face/status/(.*)",
-      "destination": {
-        "service": "backend"
-      }
-    },
-    {
       "source": "/api/(.*)",
       "destination": {
         "service": "backend"

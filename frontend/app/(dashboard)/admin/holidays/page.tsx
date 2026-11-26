@@ -65,12 +65,12 @@ export default function AdminHolidaysPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const loader = useCallback(
-    () => api.get<unknown[]>("/admin/holidays", { query: { page_size: 500 } }),
+    () => api.getAll("/admin/holidays", normalizeHoliday),
     [],
   );
   const resource = useResource(loader);
 
-  const items = useMemo(() => (resource.data ?? []).map(normalizeHoliday), [resource.data]);
+  const items = useMemo(() => resource.data ?? [], [resource.data]);
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return items;

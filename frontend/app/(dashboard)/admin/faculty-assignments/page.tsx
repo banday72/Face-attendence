@@ -31,7 +31,6 @@ import {
   normalizeClass,
   normalizeClassProfessor,
   normalizeFacultyMember,
-  normalizePaginated,
 } from "@/lib/normalize";
 import type { ClassProfessor, ClassItem, FacultyMember } from "@/lib/types";
 
@@ -42,20 +41,14 @@ export default function FacultyAssignmentsPage() {
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
-  const classesLoader = useCallback(
-    () =>
-      api.getPaginated<ClassItem>("/admin/classes", normalizeClass, {
-        query: { page_size: 100 },
-      }),
-    [],
-  );
+  const classesLoader = useCallback(async () => {
+    const items = await api.getAll<ClassItem>("/admin/classes", normalizeClass);
+    return { items, total: items.length, page: 1, page_size: items.length || 100, pages: 1 };
+  }, []);
   const classes = useResource(classesLoader);
 
   const facultyLoader = useCallback(
-    () =>
-      api
-        .get<unknown>("/admin/faculty", { query: { page_size: 100 } })
-        .then((payload) => normalizePaginated(payload, normalizeFacultyMember).items),
+    () => api.getAll("/admin/faculty", normalizeFacultyMember),
     [],
   );
   const faculty = useResource<FacultyMember[]>(facultyLoader);

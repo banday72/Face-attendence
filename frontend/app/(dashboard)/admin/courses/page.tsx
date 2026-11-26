@@ -50,7 +50,6 @@ import {
   normalizeCourse,
   normalizeCourseProfessor,
   normalizeDepartment,
-  normalizePaginated,
   normalizeProfessorOption,
 } from "@/lib/normalize";
 import type {
@@ -99,7 +98,7 @@ export default function CoursesPage() {
   );
   const resource = useResource(loader);
   const departmentsLoader = useCallback(
-    () => api.get<unknown>("/departments").then((payload) => normalizePaginated(payload, normalizeDepartment).items),
+    () => api.getAll("/departments", normalizeDepartment),
     [],
   );
   const departments = useResource<Department[]>(departmentsLoader);
@@ -138,10 +137,10 @@ export default function CoursesPage() {
     setAssignLoading(true);
     try {
       const [options] = await Promise.all([
-        api.get<unknown>("/admin/professors", { query: { page_size: 100 } }),
+        api.getAll("/admin/professors", normalizeProfessorOption),
         reloadAssignments(course.id),
       ]);
-      setProfessors(normalizePaginated(options, normalizeProfessorOption).items);
+      setProfessors(options);
     } catch (error) {
       setAssignError(errorMessage(error));
     } finally {

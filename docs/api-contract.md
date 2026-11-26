@@ -11,8 +11,8 @@ The FastAPI application publishes an authoritative OpenAPI document at `/openapi
 - Authentication: `Authorization: Bearer <access_token>` for protected operations. The refresh endpoint uses an HttpOnly cookie.
 - Students may create only their own check-in records via QR/face endpoints. They cannot create, edit, or correct records for anyone else.
 - Errors use one shape: `{ "error": { "code": "string_code", "message": "Human readable", "details": {}, "request_id": "uuid" } }`.
-- Common codes: `validation_error`, `unauthenticated`, `forbidden`, `not_found`, `conflict`, `rate_limited`, `session_expired`, `location_out_of_range`, `face_verification_failed`, `duplicate_attendance`, `face_model_unavailable`.
-- Paginated collections use `?page=1&page_size=20` and return `{ "items": [], "total": 0, "page": 1, "page_size": 20, "pages": 0 }`.
+- Common codes: `validation_error`, `unauthenticated`, `forbidden`, `not_found`, `conflict`, `rate_limited`, `session_expired`, `location_out_of_range`, `face_verification_failed`, `duplicate_attendance`.
+- Paginated collections use `?page=1&page_size=20`; `page_size` accepts 1–100 and returns `{ "items": [], "total": 0, "page": 1, "page_size": 20, "pages": 0 }`. Clients that need more than 100 rows must follow `page`/`pages`.
 - Filtering uses explicit parameters such as `department_id`, `course_id`, `class_id`, `student_id`, `from_date`, `to_date`, `status`, `search`. Sorting uses `sort_by` and `sort_order`.
 - Successful creates return `201`; deletes return `204`; idempotent updates return `200`.
 
@@ -129,7 +129,7 @@ Location results are `verified`, `out_of_range`, `unavailable`, or `not_required
 
 All face endpoints are served by the main API. The browser generates 128-d descriptors with `face-api.js`; the API never receives image frames. Authentication, consent, audit logging, liveness checks, encrypted embeddings, and matching stay in the main API.
 
-The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Descriptor vectors are finite 128-number arrays, each paired with an `[x, y]` face center. Embeddings are encrypted at rest with Fernet. Registration requires at least three valid descriptors with evidence of center movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Student self-registration records the student's explicit consent; admin-on-behalf registration requires `consent_confirmed: true` and an auditable consent reference, and writes an audit entry naming the admin actor and student. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Browser-side matching is spoofable by modified client code; liveness checks are heuristics, and a professor/manual correction path exists for students unable to use biometrics.
+The challenge is a server-configured value from `turn_left`, `turn_right`, or `blink`. Descriptor vectors are finite 128-number arrays, each paired with an `[x, y]` face center. Descriptors are encrypted at rest with Fernet. Registration requires at least three valid descriptors with evidence of center movement, rejects duplicate matches against other students, and replaces prior embeddings after successful re-registration. Student self-registration records the student's explicit consent; admin-on-behalf registration requires `consent_confirmed: true` and an auditable consent reference, and writes an audit entry naming the admin actor and student. Attendance face verification requires active consent at the current policy version, an active session, enrollment, the active liveness challenge, required location verification, a score above the configured threshold, and no existing record for that session. Browser-side matching is spoofable by modified client code; liveness checks are heuristics, and a professor/manual correction path exists for students unable to use biometrics.
 
 ## Attendance
 
@@ -149,7 +149,7 @@ The challenge is a server-configured value from `turn_left`, `turn_right`, or `b
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | GET | `/reports/summary` | admin/professor | Aggregates with `period=daily|weekly|monthly|course|student|professor|department` |
-| GET | `/reports/records` | admin/professor | Filterable, sortable, paginated records |
+| GET | `/reports/records` | admin/professor | Filterable, sortable, paginated records; corrected rows include `correction_reason` |
 | GET | `/reports/export` | admin/professor | `format=xlsx|pdf`; returns a file stream |
 
 Exports apply the same server-side filters and authorization as the report views.

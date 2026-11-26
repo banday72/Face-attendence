@@ -5,8 +5,8 @@
 ```mermaid
 flowchart LR
   Browser[Next.js browser UI] --> API[FastAPI /api/v1]
+  Browser --> Face[face-api.js local assets]
   API --> DB[(PostgreSQL)]
-  API --> Face[InsightFace model cache]
   API --> Reports[XLSX / PDF streams]
 ```
 
@@ -45,11 +45,11 @@ Important constraints:
 ## Face flow
 
 1. Student grants camera permission and explicitly consents to the current biometric policy version. An admin may capture on a student's behalf only by recording `consent_confirmed` and a consent reference that is written to the audit log.
-2. Browser captures multiple compressed frames while prompting an active movement challenge.
-3. Backend decodes frames in memory, requires exactly one face per frame, detects movement, and computes normalized embeddings using InsightFace.
-4. Embeddings are compared against all other registered students to prevent duplicates, then encrypted with Fernet and stored.
-5. For check-in, the backend requires active consent, the session's configured challenge, required location verification, an active session, enrollment, and a match above the configured cosine threshold.
-6. Raw images are never persisted. A retention task purges old embeddings and revokes consent when no embeddings remain.
+2. Browser uses locally hosted `face-api.js` assets to detect a face, generate 128-d descriptors, and record face-center positions for the active movement challenge.
+3. Browser sends only descriptor vectors and centers. The API validates vector shape, frame count, and movement, then checks consent and enrollment.
+4. Descriptors are compared against other registered students to prevent duplicates, then encrypted with Fernet and stored.
+5. For check-in, the API requires active consent, the session's configured challenge, required location verification, an active session, enrollment, and a match above the configured cosine threshold.
+6. Raw camera frames never leave the browser. A daily retention task purges old descriptors and revokes consent when no descriptors remain.
 
 Liveness is intentionally a heuristic: frame count, single-face detection, and movement. It reduces casual spoofing but cannot guarantee prevention of a determined replay or injection attack. Professor-supervised sessions and the manual correction path remain part of the design.
 
@@ -67,6 +67,6 @@ Audit entries record actor, action, entity, before/after JSON, reason, IP, and u
 
 ## Deployment
 
-Production requires PostgreSQL, HTTPS, unique secrets, constrained CORS origins, and a trusted proxy configuration. The provided Compose stack is for local development and a deployment reference; it includes migrations, conditional development seeding, persistent database storage, and a persistent face-model cache.
+Production requires PostgreSQL, HTTPS, unique secrets, constrained CORS origins, a trusted proxy configuration, and a shared rate-limit store when running multiple instances. The provided Compose stack is for local development and a deployment reference; it includes migrations, conditional development seeding, and persistent database storage.
 
-Vercel uses `backend/requirements.txt` for the public FastAPI service. The InsightFace/ONNX/OpenCV/Numpy stack lives in `backend/requirements-face.txt` and is excluded from the serverless bundle to stay under the 500 MB Python function limit; face endpoints return `503 face_model_unavailable` there. Run the Compose stack or another long-running Python service with both requirements files to enable face features.
+The API container runs `alembic upgrade head` before Uvicorn and uses `PORT` when supplied by the host. Both Compose and Vercel install only `backend/requirements.txt`; no Python face-model stack is needed because recognition runs in the browser. The legacy `face_model_unavailable` error is no longer part of the API contract.

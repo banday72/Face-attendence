@@ -8,7 +8,7 @@ A full-stack university attendance platform with role-based portals for admins, 
 - Professor portal: assigned classes, session scheduling, QR generation/rotation, live roster, face policy, manual correction, and exports.
 - Student portal: registration, enrollment view, schedule, QR scanner, face registration/check-in, history, percentages, and warnings.
 - Dynamic QR: opaque `uat:v1:<token>` payloads, server-side hash storage, expiry, rotation, one-use enforcement, enrollment checks, and GPS radius validation.
-- Face biometrics: InsightFace embeddings encrypted with Fernet, consent versioning, duplicate-face prevention, movement-based liveness heuristics, retention purge, and deletion endpoint.
+- Face biometrics: browser-generated 128-d descriptors encrypted with Fernet, consent versioning, duplicate-descriptor prevention, movement heuristics, retention purge, and deletion endpoint.
 - Attendance rules: one record per student per session, configurable lateness, automatic absent marking on close, audited corrections, and manual fallback.
 - Analytics: daily/weekly/monthly/course/student/professor/department summaries with XLSX and PDF exports.
 - UI: Next.js App Router, TypeScript, Tailwind CSS, shadcn-style components, Recharts, responsive layouts, light/dark mode, loading/error/empty states, and toasts.
@@ -37,7 +37,7 @@ Open:
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
 
-The InsightFace model pack is downloaded on first face registration/check-in and cached in the `face_models` volume. Internet access is required for that first download unless the model is preloaded into the cache.
+Face processing runs in the browser after loading locally hosted `face-api.js` assets from `frontend/public/face-api`. No server-side face model or `face_models` volume is required. Raw camera frames are never uploaded; only descriptor vectors and face-center points are sent to the API.
 
 Stop the stack:
 
@@ -153,16 +153,16 @@ OpenAPI is generated from FastAPI and is the machine-readable source of truth. T
 
 - JWT access tokens are kept in frontend memory; refresh tokens are HttpOnly cookies with rotation and reuse detection.
 - Passwords are bcrypt-hashed. Role and ownership checks are enforced on the backend.
-- Face embeddings are encrypted at rest. Raw camera frames are decoded in memory and never written to storage.
+- Face descriptor vectors are encrypted at rest. Raw camera frames stay in the browser and are never uploaded or stored.
 - Biometric collection requires explicit consent at the current policy version. Students can delete their biometric data and request correction through the professor/manual path.
-- Liveness uses frame count, single-face detection, and movement heuristics. It reduces casual photo/video spoofing but is not a guarantee against a determined attacker. GPS can also be spoofed; combine it with short-lived QR sessions and professor supervision.
+- Movement checks are heuristics on browser-supplied descriptor centers. They reduce casual photo/video replay but are not strong anti-spoofing; client code can be modified. GPS coordinates are also browser-supplied and can be spoofed. Combine these checks with short-lived QR sessions and professor supervision.
 - Audit logs record session lifecycle events, face registration/deletion, and attendance corrections.
-- In-memory rate limiting is suitable for a single process. Use a shared Redis-backed limiter and trusted-proxy configuration when running multiple instances.
+- Rate limiting uses process-local storage by default. Set `RATE_LIMIT_STORAGE_URI=redis://...` and configure trusted proxies when running multiple API instances. See `docs/privacy-and-accessibility.md` for data handling and limitations.
 - For production, set `ENVIRONMENT=production`, `ALLOW_DEV_SECRETS=0`, unique 32+ character secrets, HTTPS, real CORS origins, and trusted proxy IPs. Development seeding is disabled automatically.
 
 ## Deployment notes
 
-Compose uses a multi-stage Next.js standalone image and a non-root FastAPI container. Put both services behind a TLS-terminating reverse proxy in production, expose only the proxy publicly, persist PostgreSQL and face-model volumes, and configure backups for the database. Set `NEXT_PUBLIC_API_URL` at frontend build time because Next.js inlines public environment variables during compilation.
+Compose uses a multi-stage Next.js standalone image and a non-root FastAPI container. Put both services behind a TLS-terminating reverse proxy in production, expose only the proxy publicly, persist the PostgreSQL volume, and configure database backups. The API container runs `alembic upgrade head` on startup and honors Render's `PORT` variable. Set `NEXT_PUBLIC_API_URL` at frontend build time because Next.js inlines public environment variables during compilation.
 
 ### Vercel monorepo deployment
 

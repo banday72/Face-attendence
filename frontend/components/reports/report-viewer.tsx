@@ -133,17 +133,11 @@ export function ReportViewer({ scope }: ReportViewerProps) {
   );
   const optionsLoader = useCallback(async () => {
     const [departments, courses, classes] = await Promise.all([
-      api.get<unknown>("/departments"),
-      api.get<unknown>("/courses"),
-      api.get<unknown>(scope === "admin" ? "/admin/classes" : "/professor/classes", {
-        query: { page: 1, page_size: 100 },
-      }),
+      api.getAll("/departments", normalizeDepartment),
+      api.getAll("/courses", normalizeCourse),
+      api.getAll(scope === "admin" ? "/admin/classes" : "/professor/classes", normalizeClass),
     ]);
-    return {
-      departments: normalizePaginated(departments, normalizeDepartment).items,
-      courses: normalizePaginated(courses, normalizeCourse).items,
-      classes: normalizePaginated(classes, normalizeClass).items,
-    };
+    return { departments, courses, classes };
   }, [scope]);
 
   const summary = useResource(summaryLoader);

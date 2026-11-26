@@ -34,14 +34,32 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import { normalizeStudentDashboard } from "@/lib/normalize";
+import { normalizeSchedule, normalizeStudentDashboard } from "@/lib/normalize";
+import type { ClassItem } from "@/lib/types";
 import { formatDateTime, formatTime, percent } from "@/lib/utils";
 
 export default function StudentDashboardPage() {
-  const loader = useCallback(
-    () => api.get<unknown>("/student/dashboard").then(normalizeStudentDashboard),
-    [],
-  );
+  const loader = useCallback(async () => {
+    const [payload, schedule] = await Promise.all([
+      api.get<unknown>("/student/dashboard"),
+      api.getAll("/student/schedule", normalizeSchedule),
+    ]);
+    const dayOfWeek = (new Date().getDay() + 6) % 7;
+    const todayClasses: ClassItem[] = schedule
+      .filter((item) => item.day_of_week === dayOfWeek)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+      .map((item) => ({
+        id: item.class_id || item.id,
+        name: item.class_name || item.course_name || "Class",
+        course_name: item.course_name,
+        professor_name: item.professor_name,
+        classroom_name: item.classroom_name,
+        schedule_days: [String(item.day_of_week)],
+        start_time: item.start_time,
+        end_time: item.end_time,
+      }));
+    return { ...normalizeStudentDashboard(payload), today_classes: todayClasses };
+  }, []);
   const dashboard = useResource(loader);
 
   return (

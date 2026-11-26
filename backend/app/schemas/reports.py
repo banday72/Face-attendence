@@ -33,6 +33,7 @@ class ReportRecordOut(StrictModel):
     location_status: str
     face_status: str
     is_manual: bool
+    correction_reason: str | None = None
 
 
 class ReportExportOut(StrictModel):

@@ -34,7 +34,7 @@ import { cameraErrorMessage, startCamera, stopCamera } from "@/lib/camera";
 import { CONSENT_VERSION, FACE_CHALLENGES, FACE_FRAME_COUNT } from "@/lib/constants";
 import { captureFaceFeatures, faceDetectionErrorMessage } from "@/lib/face-api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
-import { normalizeFaceStatus, normalizePaginated, normalizeStudentOption } from "@/lib/normalize";
+import { normalizeFaceStatus, normalizeStudentOption } from "@/lib/normalize";
 import type { FaceStatus, StudentOption } from "@/lib/types";
 
 interface CapturedFrame {
@@ -65,10 +65,7 @@ export default function AdminStudentFacesPage() {
   const [statusError, setStatusError] = useState<Error | null>(null);
 
   const studentsLoader = useCallback(
-    () =>
-      api
-        .get<unknown>("/admin/students", { query: { page_size: 100 } })
-        .then((payload) => normalizePaginated(payload, normalizeStudentOption).items),
+    () => api.getAll("/admin/students", normalizeStudentOption),
     [],
   );
   const students = useResource(studentsLoader);

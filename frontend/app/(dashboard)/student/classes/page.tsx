@@ -13,16 +13,15 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import { normalizeAttendanceSummary, normalizeClass, normalizePaginated } from "@/lib/normalize";
+import { normalizeAttendanceSummary, normalizeClass } from "@/lib/normalize";
 import { formatTime, percent } from "@/lib/utils";
 
 export default function StudentClassesPage() {
   const loader = useCallback(async () => {
-    const [classesPayload, attendancePayload] = await Promise.all([
-      api.get<unknown>("/student/classes", { query: { page_size: 200 } }),
+    const [classes, attendancePayload] = await Promise.all([
+      api.getAll("/student/classes", normalizeClass),
       api.get<unknown>("/attendance/me"),
     ]);
-    const classes = normalizePaginated(classesPayload, normalizeClass).items;
     const summary = normalizeAttendanceSummary(attendancePayload);
     return { classes, summary };
   }, []);

@@ -13,18 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import { normalizeClass, normalizePaginated } from "@/lib/normalize";
+import { normalizeClass } from "@/lib/normalize";
 import { formatTime } from "@/lib/utils";
 
 export default function ProfessorClassesPage() {
   const [search, setSearch] = useState("");
-  const loader = useCallback(
-    () =>
-      api
-        .get<unknown>("/professor/classes", { query: { page_size: 200 } })
-        .then((payload) => normalizePaginated(payload, normalizeClass).items),
-    [],
-  );
+  const loader = useCallback(() => api.getAll("/professor/classes", normalizeClass), []);
   const resource = useResource(loader);
   const classes = (resource.data ?? []).filter((item) =>
     `${item.name} ${item.course_name ?? ""} ${item.code ?? ""}`

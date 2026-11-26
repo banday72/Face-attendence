@@ -26,8 +26,8 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import { normalizeAttendance, normalizeClass, normalizePaginated } from "@/lib/normalize";
-import type { AttendanceRecord } from "@/lib/types";
+import { isRecord, normalizeClass, normalizeRosterEntry } from "@/lib/normalize";
+import type { RosterEntry } from "@/lib/types";
 import { initials } from "@/lib/utils";
 
 interface StudentRow {
@@ -45,32 +45,32 @@ export default function ProfessorStudentsPage() {
   const [classFilter, setClassFilter] = useState("");
 
   const loader = useCallback(async () => {
-    const payload = await api.get<unknown>("/professor/classes", { query: { page_size: 200 } });
-    const classes = normalizePaginated(payload, normalizeClass).items;
+    const classes = await api.getAll("/professor/classes", normalizeClass);
     const rosters = await Promise.all(
       classes.map(async (item) => {
         try {
-          const roster = await api.get<unknown>(`/attendance/classes/${item.id}`, {
-            query: { page_size: 500 },
-          });
-          return { classItem: item, records: normalizePaginated(roster, normalizeAttendance).items };
+          const payload = await api.get<unknown>(`/attendance/classes/${item.id}`);
+          const entries = isRecord(payload) && Array.isArray(payload.roster)
+            ? payload.roster.map(normalizeRosterEntry)
+            : [];
+          return { classItem: item, entries };
         } catch {
-          return { classItem: item, records: [] as AttendanceRecord[] };
+          return { classItem: item, entries: [] as RosterEntry[] };
         }
       }),
     );
 
     const rows: StudentRow[] = [];
-    rosters.forEach(({ classItem, records }) => {
-      records.forEach((record) => {
-        const key = record.student_id || record.university_id || record.student_name;
+    rosters.forEach(({ classItem, entries }) => {
+      entries.forEach((entry) => {
+        const key = entry.student_id || entry.university_id || entry.student_name;
         if (!key) return;
         let row = rows.find((candidate) => candidate.student_id === key);
         if (!row) {
           row = {
             student_id: key,
-            name: record.student_name || "Student",
-            university_id: record.university_id || "",
+            name: entry.student_name || "Student",
+            university_id: entry.university_id || "",
             classes: [],
             present: 0,
             late: 0,
@@ -79,9 +79,9 @@ export default function ProfessorStudentsPage() {
           rows.push(row);
         }
         if (!row.classes.includes(classItem.name)) row.classes.push(classItem.name);
-        if (record.status === "present") row.present += 1;
-        if (record.status === "late") row.late += 1;
-        if (record.status === "absent") row.absent += 1;
+        if (entry.record?.status === "present") row.present += 1;
+        if (entry.record?.status === "late") row.late += 1;
+        if (entry.record?.status === "absent") row.absent += 1;
       });
     });
     return { classes, rows };
