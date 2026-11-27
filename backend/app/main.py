@@ -16,6 +16,7 @@ from typing import Any
 
 _startup_error: str | None = None
 _vercel_app_ready = False
+app: Any = None
 
 try:
     from alembic.config import Config as AlembicConfig
@@ -317,3 +318,5 @@ if _startup_error is not None:
         await send({"type": "http.response.body", "body": body})
 
     app = _startup_error_app
+
+handler = app
