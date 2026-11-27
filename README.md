@@ -186,7 +186,7 @@ The root `vercel.json` routes `/api/*` to the FastAPI service and all other path
 
 Vercel no longer runs `alembic upgrade head` as a build command; the `vercel.json` `buildCommand` is an echo. Build-time migrations targeted a different/ephemeral database and caused `Database has not been migrated` at runtime, so migrations now run at API startup against the runtime `DATABASE_URL`. The backend installs only `backend/requirements.txt`; no native face stack is needed.
 
-On Vercel production, `backend/app/main.py` applies an import-time environment fix: when `VERCEL_ENV=production`, it clears `VERCEL_IPC_PATH` so Vercel's generated `vc__handler__python.py` can import `vc_handler` from `vercel_runtime.vc_init`. Without it, API requests fail with `ImportError` and HTTP 500 before app code runs. Development/preview behavior is unchanged because the fix only acts when `VERCEL_ENV=production`; no separate shim file or `includeFiles` entry is needed.
+On Vercel, when `backend/app/main.py` is imported by `vercel_runtime.vc_init`, it attaches a module-level `vc_handler` proxy to `sys.modules["vercel_runtime.vc_init"]`. This satisfies Vercel's generated `/var/task/vc__handler__python.py` import (otherwise API requests fail with `ImportError` and HTTP 500 before app code runs) while leaving Vercel's IPC/server lifecycle untouched. No `sitecustomize.py` and no `includeFiles` entry are needed; development/preview are unaffected because `vercel_runtime.vc_init` is not present.
 
 ### Browser face processing
 

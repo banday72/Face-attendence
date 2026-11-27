@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import http.client
+import json
 import logging
-import os
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, HTTPException, Request
@@ -36,8 +40,52 @@ from app.db.session import SessionLocal, engine
 from app.services import report_feature_service
 from app.services.face_service import purge_expired_embeddings
 
-if os.environ.get("VERCEL_ENV") == "production":
-    os.environ.pop("VERCEL_IPC_PATH", None)
+
+def _vercel_proxy_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
+    module = sys.modules["vercel_runtime.vc_init"]
+    payload = json.loads(event["body"])
+    header_pairs = module.normalize_event_header_pairs(payload.get("headers", {}))
+    header_names = {key.lower() for key, _ in header_pairs}
+    body = payload.get("body")
+    if payload.get("encoding") == "base64":
+        body = base64.b64decode(body)
+    elif isinstance(body, str):
+        body = body.encode()
+    connection = http.client.HTTPConnection("127.0.0.1", module.http_port)
+    try:
+        connection.putrequest(
+            payload["method"],
+            payload["path"],
+            skip_host="host" in header_names,
+            skip_accept_encoding="accept-encoding" in header_names,
+        )
+        for key, value in header_pairs:
+            connection.putheader(key, value)
+        if (
+            "content-length" not in header_names
+            and "transfer-encoding" not in header_names
+        ):
+            connection.putheader("content-length", str(len(body or b"")))
+        connection.endheaders(body)
+        response = connection.getresponse()
+        response_body = response.read()
+        result: dict[str, Any] = {
+            "statusCode": response.status,
+            "headers": module.format_headers(response.headers),
+        }
+        try:
+            result["body"] = response_body.decode()
+        except UnicodeDecodeError:
+            result["body"] = base64.b64encode(response_body).decode()
+            result["encoding"] = "base64"
+        return result
+    finally:
+        connection.close()
+
+
+_vc_init = sys.modules.get("vercel_runtime.vc_init")
+if _vc_init is not None and not hasattr(_vc_init, "vc_handler"):
+    _vc_init.vc_handler = _vercel_proxy_handler
 
 logging.basicConfig(
     level=logging.INFO,
