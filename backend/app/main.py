@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -34,6 +35,9 @@ from app.core.rate_limit import limiter, rate_limit_exception_handler
 from app.db.session import SessionLocal, engine
 from app.services import report_feature_service
 from app.services.face_service import purge_expired_embeddings
+
+if os.environ.get("VERCEL_ENV") == "production":
+    os.environ.pop("VERCEL_IPC_PATH", None)
 
 logging.basicConfig(
     level=logging.INFO,
