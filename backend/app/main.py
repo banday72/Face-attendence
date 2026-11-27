@@ -320,3 +320,6 @@ if _startup_error is not None:
     app = _startup_error_app
 
 handler = app
+
+app = app
+handler = app
