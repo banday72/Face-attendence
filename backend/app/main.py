@@ -294,32 +294,45 @@ if _startup_error is None:
     logger.exception("Application startup failed")
 
 if _startup_error is not None:
-    async def _startup_error_app(scope, receive, send):
-        if scope["type"] == "lifespan":
-            while True:
-                message = await receive()
-                if message["type"] == "lifespan.startup":
-                    await send({"type": "lifespan.startup.complete"})
-                elif message["type"] == "lifespan.shutdown":
-                    await send({"type": "lifespan.shutdown.complete"})
-                    return
-        if scope["type"] != "http":
-            return
-        body = json.dumps(
-            {"detail": "Application startup failed", "startup_error": _startup_error[-12000:]}
-        ).encode()
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 500,
-                "headers": [(b"content-type", b"application/json")],
-            }
-        )
-        await send({"type": "http.response.body", "body": body})
+    try:
+        from fastapi import FastAPI as _FastAPI
+        from fastapi.responses import JSONResponse as _JSONResponse
 
-    app = _startup_error_app
+        _err_app = _FastAPI()
+
+        @_err_app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+        async def _startup_error_route(path: str):
+            return _JSONResponse(
+                status_code=500,
+                content={"detail": "Application startup failed", "startup_error": _startup_error[-12000:]},
+            )
+
+        app = _err_app
+    except Exception:
+        async def _startup_error_app(scope, receive, send):
+            if scope["type"] == "lifespan":
+                while True:
+                    message = await receive()
+                    if message["type"] == "lifespan.startup":
+                        await send({"type": "lifespan.startup.complete"})
+                    elif message["type"] == "lifespan.shutdown":
+                        await send({"type": "lifespan.shutdown.complete"})
+                        return
+            if scope["type"] != "http":
+                return
+            body = json.dumps(
+                {"detail": "Application startup failed", "startup_error": _startup_error[-12000:]}
+            ).encode()
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 500,
+                    "headers": [(b"content-type", b"application/json")],
+                }
+            )
+            await send({"type": "http.response.body", "body": body})
+
+        app = _startup_error_app
 
 handler = app
-
 app = app
-handler = app
