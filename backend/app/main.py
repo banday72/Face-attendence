@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import http.client
 import json
 import logging
 import sys
@@ -18,6 +17,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from httpx import ASGITransport, AsyncClient
+from httpx import Response as HttpxResponse
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import inspect, text
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -40,47 +41,57 @@ from app.db.session import SessionLocal, engine
 from app.services import report_feature_service
 from app.services.face_service import purge_expired_embeddings
 
+_vercel_app_ready = False
+
 
 def _vercel_proxy_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
-    module = sys.modules["vercel_runtime.vc_init"]
-    payload = json.loads(event["body"])
-    header_pairs = module.normalize_event_header_pairs(payload.get("headers", {}))
-    header_names = {key.lower() for key, _ in header_pairs}
+    global _vercel_app_ready
+    if not _vercel_app_ready:
+        run_database_migrations()
+        verify_database_readiness()
+        _vercel_app_ready = True
+    payload = json.loads(event.get("body") or "{}")
+    raw_headers = payload.get("headers", {})
+    headers: dict[str, str] = {}
+    if isinstance(raw_headers, dict):
+        headers = {str(key): str(value) for key, value in raw_headers.items()}
+    elif isinstance(raw_headers, list):
+        for item in raw_headers:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                headers[str(item[0])] = str(item[1])
+    headers["host"] = "localhost"
     body = payload.get("body")
     if payload.get("encoding") == "base64":
-        body = base64.b64decode(body)
+        body = base64.b64decode(body or "")
     elif isinstance(body, str):
         body = body.encode()
-    connection = http.client.HTTPConnection("127.0.0.1", module.http_port)
+    elif body is None:
+        body = b""
+    elif not isinstance(body, bytes):
+        body = json.dumps(body).encode()
+
+    async def call_app() -> HttpxResponse:
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://localhost") as client:
+            return await client.request(
+                payload["method"],
+                payload["path"],
+                headers=headers,
+                content=body,
+            )
+
+    response = asyncio.run(call_app())
+    response_body = response.content
+    result: dict[str, Any] = {
+        "statusCode": response.status_code,
+        "headers": dict(response.headers),
+    }
     try:
-        connection.putrequest(
-            payload["method"],
-            payload["path"],
-            skip_host="host" in header_names,
-            skip_accept_encoding="accept-encoding" in header_names,
-        )
-        for key, value in header_pairs:
-            connection.putheader(key, value)
-        if (
-            "content-length" not in header_names
-            and "transfer-encoding" not in header_names
-        ):
-            connection.putheader("content-length", str(len(body or b"")))
-        connection.endheaders(body)
-        response = connection.getresponse()
-        response_body = response.read()
-        result: dict[str, Any] = {
-            "statusCode": response.status,
-            "headers": module.format_headers(response.headers),
-        }
-        try:
-            result["body"] = response_body.decode()
-        except UnicodeDecodeError:
-            result["body"] = base64.b64encode(response_body).decode()
-            result["encoding"] = "base64"
-        return result
-    finally:
-        connection.close()
+        result["body"] = response_body.decode()
+    except UnicodeDecodeError:
+        result["body"] = base64.b64encode(response_body).decode()
+        result["encoding"] = "base64"
+    return result
 
 
 _vc_init = sys.modules.get("vercel_runtime.vc_init")
