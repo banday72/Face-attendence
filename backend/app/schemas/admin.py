@@ -199,6 +199,24 @@ class BulkImportResult(StrictModel):
     created: int
     failed: int
     errors: list[BulkImportError]
+    upload_id: str
+
+
+class BulkImportPreviewOut(StrictModel):
+    total: int
+    valid: int
+    samples: list[dict[str, Any]]
+    errors: list[BulkImportError]
+
+
+class BulkImportUploadOut(ORMModel):
+    id: str
+    actor_name: str | None
+    filename: str
+    total: int
+    created: int
+    failed: int
+    created_at: datetime
 
 
 class UserAdminOut(UserOut):

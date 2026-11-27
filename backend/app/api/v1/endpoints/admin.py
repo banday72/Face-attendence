@@ -31,6 +31,7 @@ from app.models import (
     AttendanceRecord,
     AttendanceSession,
     AuditLog,
+    BulkImportUpload,
     Class_,
     Classroom,
     Course,
@@ -50,7 +51,9 @@ from app.schemas.admin import (
     AlertsOut,
     AuditLogOut,
     BulkImportError,
+    BulkImportPreviewOut,
     BulkImportResult,
+    BulkImportUploadOut,
     ClassCreate,
     ClassOut,
     ClassProfessorOut,
@@ -741,14 +744,25 @@ def create_user(
     return _user_out(db, _create_user_record(db, payload, actor, request))
 
 
-@router.post("/users/bulk", response_model=BulkImportResult)
-async def bulk_import_users(
-    request: Request,
-    db: DB_Dependency,
-    file: UploadFile = File(...),
-    actor: User = Depends(require_admin),
-) -> BulkImportResult:
-    raw = await file.read()
+_BULK_IMPORT_COLUMNS = [
+    "role",
+    "full_name",
+    "email",
+    "password",
+    "university_id",
+    "employee_id",
+    "department",
+    "phone",
+    "program",
+    "year_level",
+    "title",
+    "office",
+]
+_BULK_PASSWORD_MASK = "********"
+_BULK_PREVIEW_SAMPLE_LIMIT = 10
+
+
+def _parse_bulk_csv(db: Session, raw: bytes) -> tuple[list[tuple[int, UserCreate]], list[BulkImportError], int]:
     if len(raw) > 2_000_000:
         raise AppError(413, "validation_error", "CSV file exceeds the 2 MB limit")
     try:
@@ -768,8 +782,8 @@ async def bulk_import_users(
     if len(rows) > 500:
         raise AppError(422, "validation_error", "CSV import is limited to 500 rows")
 
+    payloads: list[tuple[int, UserCreate]] = []
     errors: list[BulkImportError] = []
-    created = 0
     for row_number, row in enumerate(rows, start=2):
         values: dict[str, Any] = {key: (value or "").strip() for key, value in row.items() if key}
         values = {key: value for key, value in values.items() if value}
@@ -793,15 +807,158 @@ async def bulk_import_users(
                     values["year_level"] = int(values["year_level"])
                 except ValueError as exc:
                     raise AppError(422, "validation_error", "year_level must be a number") from exc
-            payload = UserCreate(**values)
+            payloads.append((row_number, UserCreate(**values)))
+        except (AppError, ValidationError, ValueError) as exc:
+            message = exc.message if isinstance(exc, AppError) else str(exc)
+            password = values.get("password")
+            if password:
+                message = message.replace(password, _BULK_PASSWORD_MASK)
+            errors.append(BulkImportError(row=row_number, email=email, error=message[:500]))
+    return payloads, errors, len(rows)
+
+
+def _bulk_preview_sample(payload: UserCreate) -> dict[str, Any]:
+    sample = payload.model_dump(mode="json", exclude_none=True)
+    sample["email"] = str(payload.email).lower()
+    sample["password"] = _BULK_PASSWORD_MASK
+    return sample
+
+
+def _bulk_upload_out(db: Session, upload: BulkImportUpload) -> BulkImportUploadOut:
+    actor = db.get(User, upload.actor_user_id) if upload.actor_user_id else None
+    return BulkImportUploadOut(
+        id=upload.id,
+        actor_name=actor.full_name if actor else None,
+        filename=upload.filename,
+        total=upload.total,
+        created=upload.created,
+        failed=upload.failed,
+        created_at=upload.created_at,
+    )
+
+
+@router.get("/users/bulk/template")
+def bulk_import_template() -> Response:
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(_BULK_IMPORT_COLUMNS)
+    writer.writerow(
+        [
+            "student",
+            "Sample Student",
+            "sample.student@university.edu",
+            "Student123!",
+            "STU-0001",
+            "",
+            "",
+            "",
+            "Computer Science",
+            "1",
+            "",
+            "",
+        ]
+    )
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="users_bulk_template.csv"'},
+    )
+
+
+@router.post("/users/bulk/preview", response_model=BulkImportPreviewOut)
+async def preview_bulk_import(
+    db: DB_Dependency, file: UploadFile = File(...)
+) -> BulkImportPreviewOut:
+    payloads, errors, total = _parse_bulk_csv(db, await file.read())
+    return BulkImportPreviewOut(
+        total=total,
+        valid=len(payloads),
+        samples=[_bulk_preview_sample(payload) for _, payload in payloads[:_BULK_PREVIEW_SAMPLE_LIMIT]],
+        errors=errors,
+    )
+
+
+@router.get("/users/bulk/uploads", response_model=Page[BulkImportUploadOut])
+def list_bulk_import_uploads(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    sort_by: Literal["filename", "total", "created", "failed", "created_at"] = "created_at",
+    sort_order: Literal["asc", "desc"] = "desc",
+) -> Page[BulkImportUploadOut]:
+    params = pagination(page, page_size, sort_by, sort_order)
+    query = apply_sort(select(BulkImportUpload), getattr(BulkImportUpload, sort_by), params)
+    result = paginate(db, query, params)
+    return Page[BulkImportUploadOut](
+        items=[_bulk_upload_out(db, upload) for upload in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
+@router.get("/users/bulk/uploads/{upload_id}/errors.csv")
+def bulk_import_errors_csv(upload_id: str, db: DB_Dependency) -> Response:
+    upload = _get_or_404(db, BulkImportUpload, upload_id, "Bulk import upload")
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(["row", "email", "error"])
+    for error in upload.errors:
+        writer.writerow([error.get("row", ""), error.get("email", ""), error.get("error", "")])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="bulk_import_errors_{upload_id}.csv"'},
+    )
+
+
+@router.post("/users/bulk", response_model=BulkImportResult)
+async def bulk_import_users(
+    request: Request,
+    db: DB_Dependency,
+    file: UploadFile = File(...),
+    actor: User = Depends(require_admin),
+) -> BulkImportResult:
+    actor_id = actor.id
+    payloads, parse_errors, total = _parse_bulk_csv(db, await file.read())
+    errors = list(parse_errors)
+    created = 0
+    for row_number, payload in payloads:
+        try:
             _create_user_record(db, payload, actor, request)
             created += 1
         except (AppError, ValidationError, IntegrityError, ValueError) as exc:
             db.rollback()
             message = exc.message if isinstance(exc, AppError) else str(exc)
-            errors.append(BulkImportError(row=row_number, email=email, error=message[:500]))
+            errors.append(
+                BulkImportError(row=row_number, email=str(payload.email), error=message[:500])
+            )
 
-    return BulkImportResult(total=len(rows), created=created, failed=len(errors), errors=errors)
+    upload = BulkImportUpload(
+        actor_user_id=actor_id,
+        filename=file.filename or "upload.csv",
+        total=total,
+        created=created,
+        failed=len(errors),
+        errors=[error.model_dump() for error in errors],
+    )
+    db.add(upload)
+    db.flush()
+    write_audit_log(
+        db,
+        action="user.bulk_import",
+        entity_type="bulk_import_upload",
+        entity_id=upload.id,
+        actor=actor,
+        after={"filename": upload.filename, "total": total, "created": created, "failed": len(errors)},
+        request=request,
+    )
+    db.commit()
+    db.refresh(upload)
+    return BulkImportResult(
+        total=total, created=created, failed=len(errors), errors=errors, upload_id=upload.id
+    )
 
 
 @router.get("/users/{user_id}", response_model=UserAdminOut)

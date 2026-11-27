@@ -505,3 +505,207 @@ export interface RegisterPayload {
   password: string;
   department_id?: string;
 }
+
+export type CorrectionStatus = "pending" | "approved" | "rejected";
+
+export interface CorrectionRequestPayload {
+  session_id: string;
+  record_id?: string | null;
+  requested_status: AttendanceStatus;
+  reason: string;
+}
+
+export interface CorrectionReviewPayload {
+  decision: "approved" | "rejected";
+  final_status?: AttendanceStatus;
+  final_method?: AttendanceMethod;
+  review_note?: string;
+}
+
+export interface CorrectionRequest {
+  id: string;
+  session_id: string;
+  record_id: string | null;
+  requested_status: AttendanceStatus;
+  reason: string;
+  review_note: string | null;
+  status: CorrectionStatus;
+  reviewed_at?: string | null;
+  created_at: string;
+  student_name: string;
+  university_id: string;
+  course_code: string;
+  class_section: string;
+  session_start: string;
+  reviewer_name: string | null;
+}
+
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: Role;
+  is_active: boolean;
+  phone: string | null;
+  created_at: string;
+  university_id?: string | null;
+  employee_id?: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
+  program?: string | null;
+  year_level?: number | null;
+  title?: string | null;
+  office?: string | null;
+}
+
+export interface Consent {
+  id: string | null;
+  student_id: string | null;
+  consent_version: string | null;
+  current_version: string;
+  consented_at?: string | null;
+  revoked_at?: string | null;
+  is_active: boolean;
+  requires_new_consent: boolean;
+}
+
+export interface Alert {
+  id: string;
+  title: string;
+  description: string;
+  severity: "warning" | "danger" | "info";
+  href: string | null;
+}
+
+export interface MissingStudent {
+  student_id: string;
+  university_id: string;
+  student_name: string;
+  enrollment_status: string;
+}
+
+export interface MarkAbsentResult {
+  session_id: string;
+  marked_count: number;
+  marked_student_ids: string[];
+}
+
+export interface ClassRisk {
+  class_id: string;
+  course_code: string;
+  course_name: string;
+  section: string;
+  enrolled_count: number;
+  total_sessions: number;
+  present: number;
+  late: number;
+  absent: number;
+  attendance_rate: number;
+  at_risk_count: number;
+}
+
+export interface BulkImportError {
+  row: number;
+  email: string;
+  error: string;
+}
+
+export interface BulkImportPreview {
+  total: number;
+  valid: number;
+  samples: Record<string, unknown>[];
+  errors: BulkImportError[];
+}
+
+export interface BulkImportResult {
+  total: number;
+  created: number;
+  failed: number;
+  errors: BulkImportError[];
+  upload_id: string;
+}
+
+export interface BulkImportUpload {
+  id: string;
+  actor_name: string | null;
+  filename: string;
+  total: number;
+  created: number;
+  failed: number;
+  created_at: string;
+}
+
+export interface ReportFilter {
+  from_date?: string | null;
+  to_date?: string | null;
+  course_id?: string | null;
+  class_id?: string | null;
+  professor_id?: string | null;
+  department_id?: string | null;
+  status?: AttendanceStatus | null;
+  method?: AttendanceMethod | null;
+  group_by?: string | null;
+  period?: string | null;
+}
+
+export interface ReportPreset {
+  id: string;
+  user_id: string;
+  name: string;
+  report_type: string;
+  filters: ReportFilter;
+  is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ScheduledExport {
+  id: string;
+  user_id: string;
+  name: string;
+  format: "xlsx" | "pdf";
+  frequency: "daily" | "weekly" | "monthly";
+  filters: ReportFilter;
+  next_run_at: string;
+  last_run_at?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ScheduledExportRun {
+  id: string;
+  schedule_id: string;
+  user_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  status: string;
+  error?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FaceEmbeddingData {
+  id: string;
+  vector: number[];
+  model_name: string;
+  vector_version: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FaceDataExport {
+  export_id: string;
+  student_id: string;
+  university_id: string;
+  exported_at: string;
+  embedding_count: number;
+  model_name: string;
+  vector_version: string;
+  descriptors: number[][];
+  embeddings: FaceEmbeddingData[];
+  consent?: Consent | null;
+  consent_metadata?: Consent | null;
+}

@@ -248,6 +248,38 @@ def test_sessions_list_filters_and_rbac(client: TestClient, db_session: Session)
     assert admin.json()["total"] == 1
 
 
+def test_my_attendance_search_and_class_fields(client: TestClient, db_session: Session) -> None:
+    data = create_academic_data(db_session)
+    session = create_session_record(db_session, data)
+    professor_headers = login_headers(client, "prof@university.edu", "Professor123!")
+    student_headers = login_headers(client, "enrolled@university.edu", "Student123!")
+    token = start_session_via_api(client, session.id, professor_headers)
+
+    checkin = client.post(
+        "/api/v1/attendance/qr",
+        headers=student_headers,
+        json={"token": token, "latitude": 37.7749, "longitude": -122.4194, "accuracy": 5},
+    )
+    assert checkin.status_code == 201, checkin.text
+    record = checkin.json()
+    assert record["class_id"] == data["class"].id
+    assert record["class_name"] == "A"
+    assert record["course_id"] == data["course"].id
+    assert record["course_name"] == "Intro to Programming"
+
+    for term in ("CS101", "Programming", "A"):
+        filtered = client.get(
+            "/api/v1/attendance/me", headers=student_headers, params={"search": term}
+        )
+        assert filtered.status_code == 200, filtered.text
+        assert filtered.json()["total"] == 1
+        assert filtered.json()["items"][0]["id"] == record["id"]
+
+    no_match = client.get("/api/v1/attendance/me", headers=student_headers, params={"search": "NoSuchCourse"})
+    assert no_match.status_code == 200
+    assert no_match.json()["total"] == 0
+
+
 def test_session_qr_validity_has_five_minute_minimum(client: TestClient, db_session: Session) -> None:
     data = create_academic_data(db_session)
     headers = login_headers(client, "prof@university.edu", "Professor123!")

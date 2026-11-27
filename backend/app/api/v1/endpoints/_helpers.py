@@ -36,12 +36,18 @@ def pagination(
 
 def serialize_record(record: AttendanceRecord) -> AttendanceRecordOut:
     student = record.student
+    class_ = record.session.class_
+    course = class_.course if class_ else None
     return AttendanceRecordOut(
         id=record.id,
         session_id=record.session_id,
         student_id=record.student_id,
         student_name=student.user.full_name if student.user else None,
         university_id=student.university_id,
+        class_id=class_.id if class_ else None,
+        class_name=(class_.name or class_.section) if class_ else None,
+        course_id=course.id if course else None,
+        course_name=course.name if course else None,
         status=cast(AttendanceStatus, record.status),
         method=cast(AttendanceMethod, record.method),
         marked_at=record.marked_at,

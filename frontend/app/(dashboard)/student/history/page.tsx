@@ -1,11 +1,13 @@
 "use client";
 
-import { History, RefreshCw, Search } from "lucide-react";
+import { ClipboardList, Download, History, RefreshCw, Search } from "lucide-react";
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/common/page-header";
 import { QueryState } from "@/components/common/query-state";
 import { AttendanceStatusBadge } from "@/components/common/status-badge";
+import { CorrectionRequestDialog } from "@/components/corrections/correction-request-dialog";
 import { AttendanceDonutChart } from "@/components/dashboard/attendance-donut-chart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api } from "@/lib/api";
+import { api, errorMessage } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
 import { normalizeAttendanceSummary } from "@/lib/normalize";
 import { formatDateTime, percent } from "@/lib/utils";
@@ -40,7 +42,27 @@ export default function StudentHistoryPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
+  const [correction, setCorrection] = useState<{ sessionId: string; recordId: string } | null>(null);
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
   const debouncedSearch = useDebouncedValue(search);
+
+  const exportCertificate = async (format: "pdf" | "xlsx") => {
+    setExporting(format);
+    try {
+      await api.download("/attendance/me/certificate", `attendance-certificate.${format}`, {
+        format,
+        from_date: fromDate || undefined,
+        to_date: toDate || undefined,
+        course_id: courseId || undefined,
+        include_details: false,
+      });
+      toast.success(`${format === "pdf" ? "PDF certificate" : "XLSX details"} downloaded`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const loader = useCallback(
     () =>
@@ -68,9 +90,25 @@ export default function StudentHistoryPage() {
         title="Attendance history"
         description="Review every class session and see your performance course by course."
         actions={
-          <Button variant="outline" onClick={resource.reload}>
-            <RefreshCw /> Refresh
-          </Button>
+          <>
+            <Button variant="outline" onClick={resource.reload}>
+              <RefreshCw /> Refresh
+            </Button>
+            <Button
+              variant="outline"
+              loading={exporting === "pdf"}
+              onClick={() => void exportCertificate("pdf")}
+            >
+              <Download /> PDF certificate
+            </Button>
+            <Button
+              variant="outline"
+              loading={exporting === "xlsx"}
+              onClick={() => void exportCertificate("xlsx")}
+            >
+              <Download /> XLSX details
+            </Button>
+          </>
         }
       />
 
@@ -201,8 +239,9 @@ export default function StudentHistoryPage() {
                         <TableHead>Status</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead>Date</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead className="w-12">
+                          <TableHead>Location</TableHead>
+                          <TableHead>Action</TableHead>
+                          <TableHead className="w-12">
                           <button type="button" onClick={resource.reload} aria-label="Refresh history">
                             <RefreshCw className="size-4 text-muted-foreground" />
                           </button>
@@ -224,6 +263,21 @@ export default function StudentHistoryPage() {
                           <TableCell className="text-xs capitalize text-muted-foreground">
                             {record.location_status?.replaceAll("_", " ") || "—"}
                           </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!record.session_id || !record.id}
+                              onClick={() =>
+                                setCorrection({
+                                  sessionId: record.session_id ?? "",
+                                  recordId: record.id,
+                                })
+                              }
+                            >
+                              <ClipboardList /> Request correction
+                            </Button>
+                          </TableCell>
                           <TableCell><History className="size-3.5 text-muted-foreground" /></TableCell>
                         </TableRow>
                       ))}
@@ -242,6 +296,14 @@ export default function StudentHistoryPage() {
           </>
         )}
       </QueryState>
+
+      <CorrectionRequestDialog
+        open={Boolean(correction)}
+        onOpenChange={(open) => !open && setCorrection(null)}
+        sessionId={correction?.sessionId ?? ""}
+        recordId={correction?.recordId}
+        onSuccess={resource.reload}
+      />
     </div>
   );
 }

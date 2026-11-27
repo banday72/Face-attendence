@@ -9,6 +9,8 @@ import { QueryState } from "@/components/common/query-state";
 import { AttendanceBarChart } from "@/components/dashboard/attendance-bar-chart";
 import { AttendanceDonutChart } from "@/components/dashboard/attendance-donut-chart";
 import { AttendanceTrendChart } from "@/components/dashboard/attendance-trend-chart";
+import { ReportPresets } from "@/components/reports/report-presets";
+import { ScheduledExports } from "@/components/reports/scheduled-exports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +25,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -41,7 +49,12 @@ import {
   normalizePaginated,
   normalizeReportSummary,
 } from "@/lib/normalize";
-import type { AttendanceRecord } from "@/lib/types";
+import type {
+  AttendanceMethod,
+  AttendanceRecord,
+  AttendanceStatus,
+  ReportFilter,
+} from "@/lib/types";
 import { formatDateTime, toDateInput } from "@/lib/utils";
 
 interface ReportViewerProps {
@@ -52,25 +65,55 @@ interface Filters {
   period: string;
   department_id: string;
   course_id: string;
+  professor_id: string;
   class_id: string;
   status: string;
+  method: AttendanceMethod | "";
+  group_by: string;
   from_date: string;
   to_date: string;
   search: string;
   page: number;
 }
 
+const periodOptions = [
+  "daily",
+  "weekly",
+  "monthly",
+  "course",
+  "student",
+  "professor",
+  "department",
+] as const;
+const statusOptions = ["present", "late", "absent", "excused"] as const;
+const methodOptions = ["qr", "face", "manual"] as const;
+
 const initialFilters: Filters = {
   period: "weekly",
   department_id: "",
   course_id: "",
+  professor_id: "",
   class_id: "",
   status: "",
+  method: "",
+  group_by: "",
   from_date: "",
   to_date: "",
   search: "",
   page: 1,
 };
+
+function optionalStatus(value: string): AttendanceStatus | null {
+  return (statusOptions as readonly string[]).includes(value)
+    ? (value as AttendanceStatus)
+    : null;
+}
+
+function optionalMethod(value: string): AttendanceMethod | null {
+  return (methodOptions as readonly string[]).includes(value)
+    ? (value as AttendanceMethod)
+    : null;
+}
 
 const statusVariant = {
   present: "success",
@@ -80,6 +123,7 @@ const statusVariant = {
 } as const;
 
 export function ReportViewer({ scope }: ReportViewerProps) {
+  const [tab, setTab] = useState("reports");
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null);
 
@@ -97,6 +141,7 @@ export function ReportViewer({ scope }: ReportViewerProps) {
       period: filters.period,
       department_id: filters.department_id || undefined,
       course_id: filters.course_id || undefined,
+      professor_id: filters.professor_id || undefined,
       class_id: filters.class_id || undefined,
       status: filters.status || undefined,
       from_date: filters.from_date || undefined,
@@ -108,6 +153,7 @@ export function ReportViewer({ scope }: ReportViewerProps) {
       filters.class_id,
       filters.course_id,
       filters.department_id,
+      filters.professor_id,
       filters.from_date,
       filters.period,
       filters.status,
@@ -166,6 +212,55 @@ export function ReportViewer({ scope }: ReportViewerProps) {
     records.reload();
   };
 
+  const currentFilters = useMemo<ReportFilter>(
+    () => ({
+      period: filters.period || null,
+      department_id: filters.department_id || null,
+      course_id: filters.course_id || null,
+      class_id: filters.class_id || null,
+      professor_id: filters.professor_id || null,
+      status: optionalStatus(filters.status),
+      method: optionalMethod(filters.method),
+      group_by: filters.group_by || null,
+      from_date: filters.from_date || null,
+      to_date: filters.to_date || null,
+    }),
+    [
+      filters.class_id,
+      filters.course_id,
+      filters.department_id,
+      filters.from_date,
+      filters.group_by,
+      filters.method,
+      filters.period,
+      filters.professor_id,
+      filters.status,
+      filters.to_date,
+    ],
+  );
+
+  const applyPreset = useCallback((filter: ReportFilter) => {
+    setFilters((current) => ({
+      ...current,
+      period:
+        filter.period && (periodOptions as readonly string[]).includes(filter.period)
+          ? filter.period
+          : initialFilters.period,
+      department_id: filter.department_id ?? "",
+      course_id: filter.course_id ?? "",
+      professor_id: filter.professor_id ?? "",
+      class_id: filter.class_id || current.class_id,
+      status: filter.status ?? "",
+      method: filter.method ?? "",
+      group_by: filter.group_by ?? "",
+      from_date: filter.from_date ? filter.from_date.slice(0, 10) : "",
+      to_date: filter.to_date ? filter.to_date.slice(0, 10) : "",
+      search: "",
+      page: 1,
+    }));
+    setTab("reports");
+  }, []);
+
   const recordsData = records.data;
   const summaryData = summary.data;
 
@@ -198,6 +293,13 @@ export function ReportViewer({ scope }: ReportViewerProps) {
         }
       />
 
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="presets">Presets</TabsTrigger>
+          <TabsTrigger value="scheduled">Scheduled exports</TabsTrigger>
+        </TabsList>
+        <TabsContent value="reports" className="mt-0 space-y-6">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm">
@@ -212,13 +314,11 @@ export function ReportViewer({ scope }: ReportViewerProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["daily", "weekly", "monthly", "course", "student", "professor", "department"].map(
-                  (period) => (
-                    <SelectItem key={period} value={period}>
-                      {period[0].toUpperCase() + period.slice(1)}
-                    </SelectItem>
-                  ),
-                )}
+                {periodOptions.map((period) => (
+                  <SelectItem key={period} value={period}>
+                    {period[0].toUpperCase() + period.slice(1)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -300,7 +400,7 @@ export function ReportViewer({ scope }: ReportViewerProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {["present", "late", "absent", "excused"].map((status) => (
+                {statusOptions.map((status) => (
                   <SelectItem key={status} value={status}>
                     {status[0].toUpperCase() + status.slice(1)}
                   </SelectItem>
@@ -447,6 +547,14 @@ export function ReportViewer({ scope }: ReportViewerProps) {
           </QueryState>
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="presets" className="mt-0">
+          <ReportPresets currentFilters={currentFilters} onApply={applyPreset} />
+        </TabsContent>
+        <TabsContent value="scheduled" className="mt-0">
+          <ScheduledExports scope={scope} currentFilters={currentFilters} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

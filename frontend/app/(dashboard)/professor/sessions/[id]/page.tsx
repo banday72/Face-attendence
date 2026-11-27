@@ -56,6 +56,8 @@ import { api, errorMessage } from "@/lib/api";
 import { LIVE_REFRESH_MS } from "@/lib/constants";
 import { useResource } from "@/lib/hooks";
 import {
+  normalizeMarkAbsentResult,
+  normalizeMissingStudent,
   normalizePaginated,
   normalizeQrPayload,
   normalizeRosterRecord,
@@ -65,6 +67,7 @@ import type {
   AttendanceMethod,
   AttendanceRecord,
   AttendanceStatus,
+  MissingStudent,
   Paginated,
   QrPayload,
   Session,
@@ -88,6 +91,8 @@ export default function SessionMonitorPage() {
   const [correctionMethod, setCorrectionMethod] = useState<AttendanceMethod>("manual");
   const [reason, setReason] = useState("");
   const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [markingAbsent, setMarkingAbsent] = useState(false);
+  const [confirmingAbsent, setConfirmingAbsent] = useState(false);
 
   const loader = useCallback(async (): Promise<SessionMonitor> => {
     const [sessionPayload, rosterPayload] = await Promise.all([
@@ -102,14 +107,24 @@ export default function SessionMonitorPage() {
   const monitor = useResource(loader);
   const { reload } = monitor;
 
+  const missingLoader = useCallback(async (): Promise<MissingStudent[]> => {
+    const payload = await api.get<unknown>(`/sessions/${sessionId}/attendance/missing`);
+    return normalizePaginated(payload, normalizeMissingStudent).items;
+  }, [sessionId]);
+  const missing = useResource(missingLoader);
+  const { reload: reloadMissing } = missing;
+
   useEffect(() => {
     setQr(null);
   }, [sessionId]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => reload(), LIVE_REFRESH_MS);
+    const timer = window.setInterval(() => {
+      reload();
+      reloadMissing();
+    }, LIVE_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [reload]);
+  }, [reload, reloadMissing]);
 
   const counts = useMemo(() => {
     const items = monitor.data?.roster.items ?? [];
@@ -138,7 +153,8 @@ export default function SessionMonitorPage() {
           toast.error("Action completed, but no QR token was returned. Try Refresh QR.");
         }
       }
-      monitor.reload();
+      reload();
+      reloadMissing();
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
@@ -174,11 +190,34 @@ export default function SessionMonitorPage() {
       });
       toast.success("Attendance corrected and logged");
       setCorrecting(null);
-      monitor.reload();
+      reload();
+      reloadMissing();
     } catch (error) {
       setCorrectionError(errorMessage(error));
     } finally {
       setBusy(null);
+    }
+  };
+
+  const handleMarkAbsent = async () => {
+    setMarkingAbsent(true);
+    try {
+      const response = await api.post<unknown>(
+        `/sessions/${sessionId}/attendance/mark-absent`,
+      );
+      const result = normalizeMarkAbsentResult(response);
+      toast.success(
+        result.marked_count === 1
+          ? "1 student marked absent"
+          : `${result.marked_count} students marked absent`,
+      );
+      setConfirmingAbsent(false);
+      reload();
+      reloadMissing();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setMarkingAbsent(false);
     }
   };
 
@@ -390,9 +429,89 @@ export default function SessionMonitorPage() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card>
+              <CardHeader className="flex-row items-center justify-between space-y-0">
+                <div className="space-y-1.5">
+                  <CardTitle>Missing students</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Enrolled students without an attendance record for this session.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmingAbsent(true)}
+                  disabled={!missing.data?.length}
+                >
+                  <UserX /> Mark remaining absent
+                </Button>
+              </CardHeader>
+              <CardContent className="px-0 pb-0">
+                <QueryState
+                  loading={missing.loading}
+                  error={missing.error}
+                  data={missing.data}
+                  onRetry={reloadMissing}
+                  skeleton={<TableSkeleton columns={3} />}
+                  emptyTitle="No missing students"
+                  emptyDescription="Every enrolled student has an attendance record."
+                >
+                  {(students) =>
+                    students.length === 0 ? (
+                      <p className="px-5 pb-6 text-center text-sm text-muted-foreground">
+                        Every enrolled student has an attendance record.
+                      </p>
+                    ) : (
+                      <>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Student</TableHead>
+                              <TableHead>University ID</TableHead>
+                              <TableHead>Enrollment</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {students.map((student, index) => (
+                              <TableRow key={student.student_id || index}>
+                                <TableCell className="font-medium">
+                                  {student.student_name || "Student"}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {student.university_id || "—"}
+                                </TableCell>
+                                <TableCell className="capitalize text-xs text-muted-foreground">
+                                  {student.enrollment_status || "—"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+                          {students.length} student(s) awaiting an attendance record.
+                        </div>
+                      </>
+                    )
+                  }
+                </QueryState>
+              </CardContent>
+            </Card>
           </>
         )}
       </QueryState>
+
+      <ConfirmDialog
+        open={confirmingAbsent}
+        onOpenChange={setConfirmingAbsent}
+        title="Mark remaining students absent?"
+        description={`${missing.data?.length ?? 0} student(s) without a check-in will be marked absent. This action is written to the audit log.`}
+        confirmLabel="Mark absent"
+        loading={markingAbsent}
+        onConfirm={() => {
+          void handleMarkAbsent();
+        }}
+      />
 
       <ConfirmDialog
         open={closing}

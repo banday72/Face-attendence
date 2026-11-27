@@ -1,29 +1,47 @@
 import type {
   AdminDashboard,
+  Alert,
   AttendanceRecord,
   AttendanceStatus,
   AttendanceSummary,
   AuditLog,
+  BulkImportError,
+  BulkImportPreview,
+  BulkImportResult,
+  BulkImportUpload,
   Classroom,
   ClassItem,
   ClassProfessor,
+  ClassRisk,
+  Consent,
+  CorrectionRequest,
+  CorrectionStatus,
   Course,
   CourseProgress,
   CourseProfessor,
   Department,
   DepartmentDetail,
   FacultyMember,
+  FaceDataExport,
+  FaceEmbeddingData,
   FaceStatus,
   Holiday,
+  MarkAbsentResult,
+  MissingStudent,
   NameValue,
   Paginated,
+  Profile,
   ProfessorDashboard,
   ProfessorOption,
   QrPayload,
+  ReportFilter,
+  ReportPreset,
   ReportSummary,
   RosterEntry,
   ScheduleGroup,
   ScheduleItem,
+  ScheduledExport,
+  ScheduledExportRun,
   Semester,
   Session,
   SessionStatus,
@@ -960,5 +978,310 @@ export function normalizeFaceStatus(value: unknown): FaceStatus {
     consented_at: pick(raw, ["consented_at", "created_at"]),
     frames_count: pickNumber(raw, ["frames_count", "embedding_count"], Number.NaN),
     model_status: pick(raw, ["model_status", "status"]),
+  };
+}
+
+function nullableString(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  return str(value);
+}
+
+function nullableDate(value: unknown): string | null {
+  return nullableString(value);
+}
+
+function floatList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => num(item, Number.NaN))
+    .filter((item): item is number => Number.isFinite(item));
+}
+
+function optionalAttendanceStatus(value: unknown): AttendanceStatus | null {
+  const status = str(value).toLowerCase();
+  if (["present", "late", "absent", "excused"].includes(status)) {
+    return status as AttendanceStatus;
+  }
+  return null;
+}
+
+function optionalAttendanceMethod(value: unknown): AttendanceRecord["method"] | null {
+  const method = str(value).toLowerCase();
+  if (["qr", "face", "manual"].includes(method)) {
+    return method as AttendanceRecord["method"];
+  }
+  return null;
+}
+
+function normalizeCorrectionStatus(value: unknown): CorrectionStatus {
+  const status = str(value).toLowerCase();
+  if (status === "approved" || status === "rejected") return status;
+  return "pending";
+}
+
+export function normalizeCorrectionRequest(value: unknown): CorrectionRequest {
+  const raw = toRaw(value);
+  return {
+    id: pick(raw, ["id"]),
+    session_id: pick(raw, ["session_id"]),
+    record_id: nullableString(raw.record_id),
+    requested_status: normalizeStatus(raw.requested_status),
+    reason: pick(raw, ["reason"]),
+    review_note: nullableString(raw.review_note),
+    status: normalizeCorrectionStatus(raw.status),
+    reviewed_at: nullableDate(raw.reviewed_at),
+    created_at: pick(raw, ["created_at"]),
+    student_name: pick(raw, ["student_name"]),
+    university_id: pick(raw, ["university_id"]),
+    course_code: pick(raw, ["course_code"]),
+    class_section: pick(raw, ["class_section"]),
+    session_start: pick(raw, ["session_start"]),
+    reviewer_name: nullableString(raw.reviewer_name),
+  };
+}
+
+export function normalizeProfile(value: unknown): Profile {
+  const raw = toRaw(value);
+  const role = str(raw.role).toLowerCase();
+  const yearLevel = num(raw.year_level, Number.NaN);
+  return {
+    id: pick(raw, ["id"]),
+    email: pick(raw, ["email"]),
+    full_name: pick(raw, ["full_name"], "User"),
+    role: role === "admin" || role === "professor" || role === "student" ? role : "student",
+    is_active: bool(raw.is_active, true),
+    phone: nullableString(raw.phone),
+    created_at: pick(raw, ["created_at"]),
+    university_id: nullableString(raw.university_id),
+    employee_id: nullableString(raw.employee_id),
+    department_id: nullableString(raw.department_id),
+    department_name: nullableString(raw.department_name),
+    program: nullableString(raw.program),
+    year_level: Number.isFinite(yearLevel) ? Math.trunc(yearLevel) : null,
+    title: nullableString(raw.title),
+    office: nullableString(raw.office),
+  };
+}
+
+export function normalizeConsent(value: unknown): Consent {
+  const raw = toRaw(value);
+  return {
+    id: nullableString(raw.id),
+    student_id: nullableString(raw.student_id),
+    consent_version: nullableString(raw.consent_version),
+    current_version: pick(raw, ["current_version", "consent_version"]),
+    consented_at: nullableDate(raw.consented_at),
+    revoked_at: nullableDate(raw.revoked_at),
+    is_active: pickBool(raw, ["is_active"]),
+    requires_new_consent: pickBool(raw, ["requires_new_consent"], true),
+  };
+}
+
+export function normalizeAlert(value: unknown): Alert | null {
+  const raw = toRaw(value);
+  if (!pick(raw, ["id"]) || !pick(raw, ["title"])) return null;
+  const severity = str(raw.severity).toLowerCase();
+  const rawHref = nullableString(raw.href);
+  const href = rawHref
+    ? rawHref
+        .replace(/^\/me\/consent$/, "/student/privacy")
+        .replace(/^\/attendance\/me$/, "/student/history")
+    : null;
+  return {
+    id: pick(raw, ["id"]),
+    title: pick(raw, ["title"]),
+    description: pick(raw, ["description"]),
+    severity: severity === "danger" || severity === "info" ? severity : "warning",
+    href,
+  };
+}
+
+export function normalizeAlerts(value: unknown): Alert[] {
+  const raw = toRaw(value);
+  const source = Array.isArray(value)
+    ? value
+    : arr(raw.items ?? raw.alerts ?? raw.data ?? raw.results);
+  return source.flatMap((item) => {
+    const alert = normalizeAlert(item);
+    return alert ? [alert] : [];
+  });
+}
+
+export function normalizeMissingStudent(value: unknown): MissingStudent {
+  const raw = toRaw(value);
+  return {
+    student_id: pick(raw, ["student_id"]),
+    university_id: pick(raw, ["university_id"]),
+    student_name: pick(raw, ["student_name", "full_name"]),
+    enrollment_status: pick(raw, ["enrollment_status", "status"]),
+  };
+}
+
+export function normalizeMarkAbsentResult(value: unknown): MarkAbsentResult {
+  const raw = toRaw(value);
+  return {
+    session_id: pick(raw, ["session_id"]),
+    marked_count: pickNumber(raw, ["marked_count"]),
+    marked_student_ids: arr(raw.marked_student_ids).map((item) => str(item)),
+  };
+}
+
+export function normalizeClassRisk(value: unknown): ClassRisk {
+  const raw = toRaw(value);
+  return {
+    class_id: pick(raw, ["class_id"]),
+    course_code: pick(raw, ["course_code"]),
+    course_name: pick(raw, ["course_name"]),
+    section: pick(raw, ["section"]),
+    enrolled_count: pickNumber(raw, ["enrolled_count"]),
+    total_sessions: pickNumber(raw, ["total_sessions"]),
+    present: pickNumber(raw, ["present"]),
+    late: pickNumber(raw, ["late"]),
+    absent: pickNumber(raw, ["absent"]),
+    attendance_rate: pickNumber(raw, ["attendance_rate"]),
+    at_risk_count: pickNumber(raw, ["at_risk_count"]),
+  };
+}
+
+export function normalizeBulkImportError(value: unknown): BulkImportError {
+  const raw = toRaw(value);
+  return {
+    row: pickNumber(raw, ["row", "row_number"]),
+    email: pick(raw, ["email"]),
+    error: pick(raw, ["error", "message"]),
+  };
+}
+
+export function normalizeBulkImportPreview(value: unknown): BulkImportPreview {
+  const raw = toRaw(value);
+  return {
+    total: pickNumber(raw, ["total"]),
+    valid: pickNumber(raw, ["valid", "valid_count"]),
+    samples: arr(raw.samples).filter(isRecord),
+    errors: arr(raw.errors).map(normalizeBulkImportError),
+  };
+}
+
+export function normalizeBulkImportResult(value: unknown): BulkImportResult {
+  const raw = toRaw(value);
+  return {
+    total: pickNumber(raw, ["total"]),
+    created: pickNumber(raw, ["created", "created_count"]),
+    failed: pickNumber(raw, ["failed", "failed_count"]),
+    errors: arr(raw.errors).map(normalizeBulkImportError),
+    upload_id: pick(raw, ["upload_id"]),
+  };
+}
+
+export function normalizeBulkImportUpload(value: unknown): BulkImportUpload {
+  const raw = toRaw(value);
+  return {
+    id: pick(raw, ["id"]),
+    actor_name: nullableString(raw.actor_name),
+    filename: pick(raw, ["filename"]),
+    total: pickNumber(raw, ["total"]),
+    created: pickNumber(raw, ["created"]),
+    failed: pickNumber(raw, ["failed"]),
+    created_at: pick(raw, ["created_at"]),
+  };
+}
+
+export function normalizeReportFilter(value: unknown): ReportFilter {
+  const raw = toRaw(value);
+  const status = optionalAttendanceStatus(raw.status);
+  const method = optionalAttendanceMethod(raw.method);
+  return {
+    from_date: nullableString(raw.from_date),
+    to_date: nullableString(raw.to_date),
+    course_id: nullableString(raw.course_id),
+    class_id: nullableString(raw.class_id),
+    professor_id: nullableString(raw.professor_id),
+    department_id: nullableString(raw.department_id),
+    status,
+    method,
+    group_by: nullableString(raw.group_by),
+    period: nullableString(raw.period),
+  };
+}
+
+export function normalizeReportPreset(value: unknown): ReportPreset {
+  const raw = toRaw(value);
+  return {
+    id: pick(raw, ["id"]),
+    user_id: pick(raw, ["user_id"]),
+    name: pick(raw, ["name"], "Preset"),
+    report_type: pick(raw, ["report_type"], "records"),
+    filters: normalizeReportFilter(raw.filters),
+    is_default: pickBool(raw, ["is_default"]),
+    created_at: pick(raw, ["created_at"]) || undefined,
+    updated_at: pick(raw, ["updated_at"]) || undefined,
+  };
+}
+
+export function normalizeScheduledExport(value: unknown): ScheduledExport {
+  const raw = toRaw(value);
+  const format = str(raw.format).toLowerCase();
+  const frequency = str(raw.frequency).toLowerCase();
+  return {
+    id: pick(raw, ["id"]),
+    user_id: pick(raw, ["user_id"]),
+    name: pick(raw, ["name"], "Export"),
+    format: format === "pdf" ? "pdf" : "xlsx",
+    frequency:
+      frequency === "daily" || frequency === "monthly" ? frequency : "weekly",
+    filters: normalizeReportFilter(raw.filters),
+    next_run_at: pick(raw, ["next_run_at"]),
+    last_run_at: nullableDate(raw.last_run_at),
+    is_active: pickBool(raw, ["is_active"], true),
+    created_at: pick(raw, ["created_at"]) || undefined,
+    updated_at: pick(raw, ["updated_at"]) || undefined,
+  };
+}
+
+export function normalizeScheduledExportRun(value: unknown): ScheduledExportRun {
+  const raw = toRaw(value);
+  return {
+    id: pick(raw, ["id"]),
+    schedule_id: pick(raw, ["schedule_id"]),
+    user_id: pick(raw, ["user_id"]),
+    filename: pick(raw, ["filename"]),
+    content_type: pick(raw, ["content_type"]),
+    size_bytes: pickNumber(raw, ["size_bytes"]),
+    status: pick(raw, ["status"], "completed"),
+    error: nullableString(raw.error),
+    created_at: pick(raw, ["created_at"]) || undefined,
+    updated_at: pick(raw, ["updated_at"]) || undefined,
+  };
+}
+
+export function normalizeFaceEmbeddingData(value: unknown): FaceEmbeddingData {
+  const raw = toRaw(value);
+  return {
+    id: pick(raw, ["id"]),
+    vector: floatList(raw.vector),
+    model_name: pick(raw, ["model_name"]),
+    vector_version: pick(raw, ["vector_version"]),
+    is_active: pickBool(raw, ["is_active"], true),
+    created_at: pick(raw, ["created_at"]),
+    updated_at: pick(raw, ["updated_at"]),
+  };
+}
+
+export function normalizeFaceDataExport(value: unknown): FaceDataExport {
+  const raw = toRaw(value);
+  return {
+    export_id: pick(raw, ["export_id"]),
+    student_id: pick(raw, ["student_id"]),
+    university_id: pick(raw, ["university_id"]),
+    exported_at: pick(raw, ["exported_at"]),
+    embedding_count: pickNumber(raw, ["embedding_count"]),
+    model_name: pick(raw, ["model_name"]),
+    vector_version: pick(raw, ["vector_version"]),
+    descriptors: arr(raw.descriptors).map((item) => floatList(item)),
+    embeddings: arr(raw.embeddings).map(normalizeFaceEmbeddingData),
+    consent: raw.consent ? normalizeConsent(raw.consent) : null,
+    consent_metadata: raw.consent_metadata
+      ? normalizeConsent(raw.consent_metadata)
+      : null,
   };
 }

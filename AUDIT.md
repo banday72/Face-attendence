@@ -17,13 +17,13 @@ Scope: entire tracked repository (frontend, backend, migrations, tests, docs, de
 - `.env.example`, `backend/.env.example`, `frontend/.env.example` — tracked placeholders. Local `.env` files are ignored.
 
 ### Backend flow
-- `backend/app/main.py` — app factory, middleware (request ID, timing, security headers), exception handlers, readiness guard, expired face-embedding purge, router registration.
+- `backend/app/main.py` — app factory, middleware (request ID, timing, security headers), exception handlers, readiness guard, expired face-embedding purge, background scheduled-export runner, router registration.
 - `backend/app/api/v1/router.py` — mounts all endpoints under `/api/v1`.
-- `backend/app/api/v1/endpoints/` — auth, admin, academic, attendance, sessions, face, reports, timetable.
+- `backend/app/api/v1/endpoints/` — auth, admin, academic, attendance, corrections, profile, professor tools, sessions, face, reports, timetable.
 - `backend/app/core/` — config, security (bcrypt, JWT, Fernet), RBAC dependencies, error envelopes, rate limiting, proxy handling.
-- `backend/app/models/` — users, profiles, academic structure, enrollments, sessions, attendance records, face embeddings, consent, audit logs, refresh tokens, timetable.
-- `backend/app/services/` — attendance, face, location, QR, reports, timetable logic.
-- `backend/alembic/versions/` — six migrations (`0001`–`0006`); head `9c2f7a4b81d3`.
+- `backend/app/models/` — users, profiles, academic structure, enrollments, sessions, attendance records, face embeddings, consent, audit logs, refresh tokens, timetable, correction requests, bulk uploads, report presets, scheduled exports/runs.
+- `backend/app/services/` — attendance, face, location, QR, reports, corrections, certificates, timetable logic.
+- `backend/alembic/versions/` — seven migrations (`0001`–`0007`); head `b4e2f6a9c7d1`.
 
 ### Frontend flow
 - `frontend/app/(dashboard)/layout.tsx` — client-side auth/role guard and shell.
@@ -32,7 +32,7 @@ Scope: entire tracked repository (frontend, backend, migrations, tests, docs, de
 - `frontend/lib/auth-context.tsx` — auth bootstrap, login/register/logout, unauthorized event.
 - `frontend/lib/normalize.ts` — backend-to-UI contract adapters.
 - `frontend/lib/hooks.ts` — `useResource` load/reload state.
-- Feature pages: admin CRUD/timetable/reports/audit/faces; professor classes/students/sessions/history/reports; student classes/schedule/QR/face/history.
+- Feature pages: admin CRUD/timetable/reports/audit/faces/correction reviews/bulk import wizard; professor classes/students/sessions/history/reports/correction reviews/at-risk; student classes/schedule/QR/face/history/correction requests/profile/privacy.
 
 ### Data and auth flow
 Browser → Next client → REST `/api/v1` → FastAPI endpoint → RBAC dependency → service → SQLAlchemy model → DB. Access token is held in memory; refresh token is an HttpOnly cookie scoped to `/api/v1/auth`. Authorization checks use the database `User.role`, not the JWT role claim.
@@ -182,3 +182,45 @@ Initial `AUDIT.md` written before implementation. Results and actual test output
 - No live Render/Vercel deployment was exercised; Render documentation fetches failed with transport errors during research.
 - Competitor research used official vendor pages, but exact URLs were not retained in session notes; re-source them before publishing externally.
 - No browser-level end-to-end check was run against seeded data; verification is static analysis, unit tests, lint, typecheck, and production build.
+
+## 9. Feature foundation and user workflows (2026-11-27)
+
+### Migration and models
+
+- `backend/alembic/versions/0007_feature_foundation.py`: revision `b4e2f6a9c7d1`, down revision `9c2f7a4b81d3`, new Alembic head. Adds `attendance_correction_requests` (partial unique index for one pending request per student/session), `bulk_import_uploads`, `report_presets`, `scheduled_report_exports`, and `scheduled_export_runs`, with matching ORM models.
+
+### Backend endpoints (all under `/api/v1`)
+
+- Corrections: `POST /attendance/correction-requests`, `GET /attendance/correction-requests/me`, `GET /attendance/correction-requests`, `POST /attendance/correction-requests/{request_id}/review`, `POST /attendance/correction-requests/{request_id}/withdraw`. `session_id` is required and `record_id` is optional for missing records. Professor/admin review writes audit entries; approval creates or updates the attendance record, and rejection requires `review_note`.
+- Student self-service: `GET`/`PATCH /me/profile`, `GET`/`POST /me/consent`, `GET /face/me/export`, `GET /me/alerts`, `GET /attendance/me/certificate?format=pdf|xlsx&...`.
+- Professor tools: `GET /sessions/{session_id}/attendance/missing`, `POST /sessions/{session_id}/attendance/mark-absent`, `GET /professor/classes/risk`.
+- Bulk import: `GET /admin/users/bulk/template`, `POST /admin/users/bulk/preview`, `POST /admin/users/bulk`, `GET /admin/users/bulk/uploads`, `GET /admin/users/bulk/uploads/{upload_id}/errors.csv`. Multipart field is `file`; upload history and errors are persisted.
+- Reports: `GET`/`POST /reports/presets`, `DELETE /reports/presets/{id}`, `GET`/`POST /reports/scheduled-exports`, `PATCH`/`DELETE /reports/scheduled-exports/{id}`, `POST /reports/scheduled-exports/{id}/run`, `GET /reports/scheduled-exports/runs`, `GET /reports/scheduled-exports/runs/{id}/download`. Run history and files are stored in-app; there is no email delivery.
+
+### Frontend
+
+- Added student correction requests/profile/privacy pages, professor correction reviews and at-risk classes pages, an admin correction reviews page, a bulk import wizard in admin users, and report presets/scheduled exports tabs in the report viewer. Role-aware navigation entries and topbar alerts via `/me/alerts` were added.
+
+### Verification executed for this feature set
+
+- `py -m pytest -q` in `backend`: 48 passed.
+- `py -m ruff check app tests` in `backend`: passed.
+- `npm run lint`, `npx tsc --noEmit`, and `npm run build` in `frontend`: passed.
+
+### Scope notes
+
+- No live deployment or browser-level end-to-end run was performed for this feature set; scheduled exports do not send email.
+
+## 10. Final follow-up changes
+
+- **Presets**: added `PATCH /reports/presets/{preset_id}`. Setting `is_default: true` clears the caller's other defaults in one commit and records the cleared IDs in the audit entry; the frontend now uses PATCH instead of delete/recreate for default selection.
+- **Report filters**: `ReportFilterIn` and frontend `ReportFilter` accept `class_id`; it reaches report generation and can be saved in presets and scheduled exports. The scheduled-export UI no longer offers an ineffective "Group by" filter.
+- **Run history**: `GET /reports/scheduled-exports/runs` now returns `Page[ScheduledExportRunOut]` with `page`/`page_size` and optional `schedule_id` filtering.
+- **Automatic execution**: `backend/app/main.py` starts a background task in non-test environments that processes due active schedules every 60 seconds (up to 20 per pass) and stores runs; manual `POST /reports/scheduled-exports/{id}/run` remains available.
+- **Attendance history/alerts**: `GET /attendance/me` accepts optional `search` and returns `class_id`, `class_name`, `course_id`, and `course_name` on records. Topbar alert links with `?search=` now prefill the admin users table search.
+- **Corrections**: approval preserves an existing attendance record's method when no `final_method` is supplied; new records still use `manual`.
+
+### Verification
+
+- `py -m pytest -q` in `backend`: 57 passed; `py -m ruff check app tests`: clean.
+- Frontend `npm run lint`, `npx tsc --noEmit`, and `npm run build`: all passed; `npm run build` generated 40 static pages with `/professor/sessions/[id]` dynamic.

@@ -29,6 +29,7 @@ from app.core.errors import (
 )
 from app.core.rate_limit import limiter, rate_limit_exception_handler
 from app.db.session import SessionLocal, engine
+from app.services import report_feature_service
 from app.services.face_service import purge_expired_embeddings
 
 logging.basicConfig(
@@ -94,20 +95,36 @@ async def face_retention_task() -> None:
             logger.exception("Face retention cleanup failed")
 
 
+async def scheduled_export_task() -> None:
+    while True:
+        await asyncio.sleep(60)
+        try:
+            with SessionLocal() as db:
+                processed = report_feature_service.run_due_scheduled_exports(db)
+                db.commit()
+            if processed:
+                logger.info("Processed %d due scheduled exports", processed)
+        except Exception:
+            logger.exception("Scheduled export runner failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     retention_task: asyncio.Task[None] | None = None
+    scheduled_export_runner: asyncio.Task[None] | None = None
     if not settings.is_testing:
         verify_database_readiness()
         if settings.face_retention_days > 0:
             retention_task = asyncio.create_task(face_retention_task())
+        scheduled_export_runner = asyncio.create_task(scheduled_export_task())
     yield
-    if retention_task is not None:
-        retention_task.cancel()
-        try:
-            await retention_task
-        except asyncio.CancelledError:
-            pass
+    for task in (retention_task, scheduled_export_runner):
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 def create_app(config: Settings | None = None) -> FastAPI:

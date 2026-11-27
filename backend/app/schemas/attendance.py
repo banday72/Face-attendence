@@ -58,6 +58,10 @@ class AttendanceRecordOut(ORMModel):
     student_id: str
     student_name: str | None = None
     university_id: str | None = None
+    class_id: str | None = None
+    class_name: str | None = None
+    course_id: str | None = None
+    course_name: str | None = None
     status: AttendanceStatus
     method: AttendanceMethod
     marked_at: datetime

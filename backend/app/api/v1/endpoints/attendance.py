@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints._helpers import pagination, report_filters, serialize_record
+from app.core.audit import write_audit_log
 from app.core.deps import (
     DB_Dependency,
     assert_professor_owns_class,
@@ -19,7 +21,7 @@ from app.core.deps import (
     student_profile,
 )
 from app.core.errors import AppError
-from app.core.rate_limit import face_attendance_limit, qr_checkin_limit
+from app.core.rate_limit import face_attendance_limit, limiter, qr_checkin_limit
 from app.models import (
     AttendanceRecord,
     AttendanceSession,
@@ -42,10 +44,12 @@ from app.schemas.attendance import (
 )
 from app.schemas.common import Page, apply_sort, paginate
 from app.schemas.reports import ReportRecordOut
-from app.services import attendance_service, report_service
+from app.services import attendance_service, certificate_service, report_service
 from app.services.class_service import professor_class_filter
+from app.utils.uuid import utcnow
 
 router = APIRouter(prefix="", tags=["attendance"])
+certificate_limit = limiter.limit("10/minute", methods=["GET"])
 
 
 def _course_percentages(db: Session, student_id: str) -> list[CoursePercentage]:
@@ -133,6 +137,7 @@ def my_attendance(
     status: str | None = Query(None, pattern="^(present|late|absent|excused)$"),
     from_date: datetime | None = None,
     to_date: datetime | None = None,
+    search: str | None = Query(None, max_length=100),
     sort_by: str = "marked_at",
     sort_order: str = "desc",
 ) -> StudentAttendanceHistory:
@@ -142,10 +147,16 @@ def my_attendance(
         select(AttendanceRecord)
         .join(AttendanceSession, AttendanceSession.id == AttendanceRecord.session_id)
         .join(Class_, Class_.id == AttendanceSession.class_id)
+        .join(Course, Course.id == Class_.course_id)
         .where(AttendanceRecord.student_id == student.id)
     )
     if course_id:
         query = query.where(Class_.course_id == course_id)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(Course.code.ilike(pattern), Course.name.ilike(pattern), Class_.section.ilike(pattern))
+        )
     if status:
         query = query.where(AttendanceRecord.status == status)
     if from_date:
@@ -166,6 +177,66 @@ def my_attendance(
         page_size=result.page_size,
         pages=result.pages,
         course_percentages=_course_percentages(db, student.id),
+    )
+
+
+@router.get("/attendance/me/certificate")
+@certificate_limit
+def attendance_certificate(
+    request: Request,
+    db: DB_Dependency,
+    user: User = Depends(require_student),
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    course_id: str | None = None,
+    format: Literal["pdf", "xlsx"] = Query("pdf"),
+    include_details: bool = Query(False),
+) -> Response:
+    if from_date and to_date and from_date > to_date:
+        raise AppError(422, "validation_error", "from_date must be before to_date")
+    student = student_profile(db, user)
+    filters = report_filters(
+        course_id=course_id,
+        student_id=student.id,
+        from_date=from_date,
+        to_date=to_date,
+        sort_by="marked_at",
+        sort_order="desc",
+    )
+    report_records = [
+        report_service.record_to_report(record)
+        for record in db.scalars(report_service.records_query(db, filters)).unique().all()
+    ]
+    if format == "pdf" and not include_details:
+        content, media_type, filename = certificate_service.export_certificate(
+            student=student,
+            records=report_records,
+            from_date=from_date,
+            to_date=to_date,
+            course_id=course_id,
+        )
+    else:
+        content, media_type, _ = report_service.export_records(report_records, format)
+        filename = certificate_service.certificate_filename(student, format)
+    write_audit_log(
+        db,
+        action="attendance.certificate_export",
+        entity_type="student",
+        entity_id=student.id,
+        actor=user,
+        after={
+            "format": format,
+            "include_details": include_details,
+            "record_count": len(report_records),
+            "exported_at": utcnow().isoformat(),
+        },
+        request=request,
+    )
+    db.commit()
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

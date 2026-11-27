@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
+import { normalizeAlerts } from "@/lib/normalize";
 import { breadcrumbsForPath, navItemsForRole } from "@/lib/navigation";
 import type { Role, User } from "@/lib/types";
 import { cn, initials, roleLabel } from "@/lib/utils";
@@ -35,36 +36,6 @@ interface TopbarProps {
   onMenuClick: () => void;
   onLogout: () => void;
   loggingOut: boolean;
-}
-
-interface AlertItem {
-  id: string;
-  title: string;
-  description: string;
-  severity: "warning" | "danger" | "info";
-  href: string | null;
-}
-
-function normalizeAlerts(payload: unknown): AlertItem[] {
-  const root = payload as { items?: unknown };
-  if (!Array.isArray(root.items)) return [];
-  return root.items.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const value = item as Record<string, unknown>;
-    if (typeof value.id !== "string" || typeof value.title !== "string") return [];
-    return [
-      {
-        id: value.id,
-        title: value.title,
-        description: typeof value.description === "string" ? value.description : "",
-        severity:
-          value.severity === "danger" || value.severity === "info"
-            ? value.severity
-            : "warning",
-        href: typeof value.href === "string" ? value.href : null,
-      },
-    ];
-  });
 }
 
 export function Topbar({
@@ -83,12 +54,11 @@ export function Topbar({
   const results = navItemsForRole(user.role as Role)
     .filter((item) => item.label.toLowerCase().includes(search.trim().toLowerCase()))
     .slice(0, 6);
-  const alertsEnabled = user.role === "admin";
   const alertsLoader = useCallback(
-    () => api.get<unknown>("/admin/alerts").then(normalizeAlerts),
+    () => api.get<unknown>("/me/alerts").then(normalizeAlerts),
     [],
   );
-  const alerts = useResource(alertsLoader, alertsEnabled);
+  const alerts = useResource(alertsLoader);
   const { reload: reloadAlerts } = alerts;
   const alertCount = alerts.data?.length ?? 0;
 
@@ -103,10 +73,9 @@ export function Topbar({
   }, []);
 
   useEffect(() => {
-    if (!alertsEnabled) return;
     const timer = window.setInterval(() => reloadAlerts(), 60_000);
     return () => window.clearInterval(timer);
-  }, [alertsEnabled, reloadAlerts]);
+  }, [reloadAlerts]);
 
   return (
     <header className="sticky top-0 z-30 flex h-[72px] items-center gap-3 border-b border-border bg-card px-4 sm:px-6">
@@ -218,8 +187,7 @@ export function Topbar({
             {alertCount ? <Badge variant="warning">{alertCount} new</Badge> : null}
           </div>
           <DropdownMenuSeparator />
-          {alertsEnabled ? (
-            alerts.loading ? (
+          {alerts.loading ? (
               <p className="px-3 py-6 text-center text-xs text-muted-foreground">Loading alerts…</p>
             ) : alerts.data?.length ? (
               <div className="max-h-80 space-y-1 overflow-auto p-1">
@@ -259,12 +227,7 @@ export function Topbar({
               <p className="px-3 py-6 text-center text-xs text-muted-foreground">
                 You&apos;re all caught up. Attendance alerts will appear here.
               </p>
-            )
-          ) : (
-            <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-              You&apos;re all caught up. Attendance alerts will appear here.
-            </p>
-          )}
+            )}
         </DropdownMenuContent>
       </DropdownMenu>
 

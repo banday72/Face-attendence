@@ -10,6 +10,11 @@ A full-stack university attendance platform with role-based portals for admins, 
 - Dynamic QR: opaque `uat:v1:<token>` payloads, server-side hash storage, expiry, rotation, one-use enforcement, enrollment checks, and GPS radius validation.
 - Face biometrics: browser-generated 128-d descriptors encrypted with Fernet, consent versioning, duplicate-descriptor prevention, movement heuristics, retention purge, and deletion endpoint.
 - Attendance rules: one record per student per session, configurable lateness, automatic absent marking on close, audited corrections, and manual fallback.
+- Correction workflow: students request status changes (including for missing records) with one pending request per session; professors/admins review with an audit trail, rejected reviews require a note, approvals keep an existing record's method unless overridden, and pending requests can be withdrawn.
+- Student self-service: searchable attendance history, profile editing, biometric consent and face-data export, role-aware alerts, and PDF/XLSX attendance certificates.
+- Professor tools: missing-attendance list, mark remaining students absent, and at-risk class overview.
+- Bulk import: CSV template, preview, persisted upload history, and downloadable per-row error CSV.
+- Reports: saved filter presets (atomic default switching), `class_id` filtering, and scheduled exports that run automatically every 60 seconds in non-test environments with paginated in-app run history and downloads; no email delivery.
 - Analytics: daily/weekly/monthly/course/student/professor/department summaries with XLSX and PDF exports.
 - UI: Next.js App Router, TypeScript, Tailwind CSS, shadcn-style components, Recharts, responsive layouts, light/dark mode, loading/error/empty states, and toasts.
 
@@ -124,6 +129,7 @@ To seed a shared non-production database explicitly, set `FORCE_SEED=1` and run 
 5. Alternatively, students with registered faces use **Face verification**, complete the displayed challenge, and submit frames plus location when required.
 6. The professor sees live counts and the roster. Closing the session marks enrolled students without records as absent.
 7. Corrections require a reason and are written to the audit log.
+8. If a record is missing or incorrect, the student submits a correction request; a professor or admin reviews it. Approval creates or updates the record and writes audit entries.
 
 ## Verification
 
@@ -138,8 +144,11 @@ py -m compileall app
 ```powershell
 cd frontend
 npm run lint
+npx tsc --noEmit
 npm run build
 ```
+
+At the time of writing, the backend passes `py -m pytest -q` (57 passed) and `py -m ruff check app tests`; frontend `npm run lint`, `npx tsc --noEmit`, and `npm run build` also passed (40 static pages generated; `/professor/sessions/[id]` dynamic).
 
 ## API contract
 

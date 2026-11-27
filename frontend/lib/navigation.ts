@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   BarChart3,
   BookOpen,
   CalendarClock,
@@ -12,6 +13,8 @@ import {
   ScanFace,
   ScrollText,
   Settings2,
+  ShieldCheck,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -46,6 +49,12 @@ export const navigation: Record<Role, NavGroup[]> = {
           href: "/admin/reports",
           icon: FileBarChart,
           description: "Analytics and exports",
+        },
+        {
+          label: "Correction reviews",
+          href: "/admin/correction-requests",
+          icon: ClipboardList,
+          description: "Student attendance correction queue",
         },
       ],
     },
@@ -90,6 +99,7 @@ export const navigation: Record<Role, NavGroup[]> = {
         { label: "My classes", href: "/professor/classes", icon: GraduationCap },
         { label: "Sessions", href: "/professor/sessions", icon: CalendarClock },
         { label: "Students", href: "/professor/students", icon: Users },
+        { label: "At-risk classes", href: "/professor/at-risk", icon: AlertTriangle },
       ],
     },
     {
@@ -97,6 +107,11 @@ export const navigation: Record<Role, NavGroup[]> = {
       items: [
         { label: "History", href: "/professor/history", icon: History },
         { label: "Reports", href: "/professor/reports", icon: BarChart3 },
+        {
+          label: "Correction reviews",
+          href: "/professor/correction-requests",
+          icon: ClipboardList,
+        },
       ],
     },
   ],
@@ -113,6 +128,11 @@ export const navigation: Record<Role, NavGroup[]> = {
         { label: "My classes", href: "/student/classes", icon: BookOpen },
         { label: "Schedule", href: "/student/schedule", icon: CalendarClock },
         { label: "History", href: "/student/history", icon: History },
+        {
+          label: "Correction requests",
+          href: "/student/correction-requests",
+          icon: ClipboardList,
+        },
       ],
     },
     {
@@ -121,6 +141,13 @@ export const navigation: Record<Role, NavGroup[]> = {
         { label: "Scan QR", href: "/student/scan", icon: QrCode },
         { label: "Face check-in", href: "/student/face-attendance", icon: ScanFace },
         { label: "Register face", href: "/student/face-register", icon: Camera },
+      ],
+    },
+    {
+      label: "Account",
+      items: [
+        { label: "Profile", href: "/student/profile", icon: UserRound },
+        { label: "Privacy & face data", href: "/student/privacy", icon: ShieldCheck },
       ],
     },
   ],
