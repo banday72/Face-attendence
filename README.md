@@ -29,7 +29,7 @@ scripts/   Local setup and startup helpers
 
 ## Quick start with Docker
 
-Docker Compose starts PostgreSQL, runs the Alembic migration, seeds development data, and serves the API and frontend.
+Docker Compose starts PostgreSQL, seeds development data, and serves the API and frontend. The API applies Alembic migrations at startup against the `DATABASE_URL` it uses at runtime.
 
 ```powershell
 Copy-Item .env.example .env
@@ -171,7 +171,7 @@ OpenAPI is generated from FastAPI and is the machine-readable source of truth. T
 
 ## Deployment notes
 
-Compose uses a multi-stage Next.js standalone image and a non-root FastAPI container. Put both services behind a TLS-terminating reverse proxy in production, expose only the proxy publicly, persist the PostgreSQL volume, and configure database backups. The API container runs `alembic upgrade head` on startup and honors Render's `PORT` variable. Set `NEXT_PUBLIC_API_URL` at frontend build time because Next.js inlines public environment variables during compilation.
+Compose uses a multi-stage Next.js standalone image and a non-root FastAPI container. Put both services behind a TLS-terminating reverse proxy in production, expose only the proxy publicly, persist the PostgreSQL volume, and configure database backups. At API startup, `run_database_migrations()` in `backend/app/main.py` runs Alembic against the same `DATABASE_URL` as the running API; `verify_database_readiness()` runs afterward and only checks the result. The Docker/Render command no longer invokes the Alembic CLI before Uvicorn, and the container honors Render's `PORT` variable. `DATABASE_URL` must point to the production PostgreSQL database used at runtime; if it is missing or wrong, startup fails with a config/migration error. Set `NEXT_PUBLIC_API_URL` at frontend build time because Next.js inlines public environment variables during compilation.
 
 ### Vercel monorepo deployment
 
@@ -179,12 +179,12 @@ The root `vercel.json` routes `/api/*` to the FastAPI service and all other path
 
 - `NEXT_PUBLIC_API_URL=/api/v1` (build-time frontend variable)
 - `ENVIRONMENT=production`, `ALLOW_DEV_SECRETS=0`
-- `DATABASE_URL` pointing to a managed PostgreSQL instance
+- `DATABASE_URL` pointing to the managed PostgreSQL instance used by the running API
 - Unique `JWT_SECRET` and `FACE_ENCRYPTION_KEY`
 - `CORS_ORIGINS=https://your-domain.example`
 - `TRUSTED_PROXY_IPS` for the Vercel proxy range
 
-The Vercel backend runs `alembic upgrade head` during build; run it manually against the same database if you deploy outside Vercel. The backend installs only `backend/requirements.txt`; no native face stack is needed.
+Vercel no longer runs `alembic upgrade head` as a build command; the `vercel.json` `buildCommand` is an echo. Build-time migrations targeted a different/ephemeral database and caused `Database has not been migrated` at runtime, so migrations now run at API startup against the runtime `DATABASE_URL`. The backend installs only `backend/requirements.txt`; no native face stack is needed.
 
 ### Browser face processing
 

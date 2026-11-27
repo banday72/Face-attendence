@@ -6,7 +6,7 @@
       "framework": "fastapi",
       "entrypoint": "app.main:app",
       "installCommand": "pip install -r requirements.txt",
-      "buildCommand": "alembic upgrade head",
+      "buildCommand": "echo \"Migrations run on API startup\"",
       "functions": {
         "app/main.py": {
           "excludeFiles": "{tests/**,__pycache__/**,**/__pycache__/**,**/*.pyc,.pytest_cache/**,.mypy_cache/**,.ruff_cache/**,*.db,*.sqlite,*.sqlite3}"

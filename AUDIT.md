@@ -17,7 +17,7 @@ Scope: entire tracked repository (frontend, backend, migrations, tests, docs, de
 - `.env.example`, `backend/.env.example`, `frontend/.env.example` — tracked placeholders. Local `.env` files are ignored.
 
 ### Backend flow
-- `backend/app/main.py` — app factory, middleware (request ID, timing, security headers), exception handlers, readiness guard, expired face-embedding purge, background scheduled-export runner, router registration.
+- `backend/app/main.py` — app factory, middleware (request ID, timing, security headers), exception handlers, startup Alembic migrations followed by readiness check, expired face-embedding purge, background scheduled-export runner, router registration.
 - `backend/app/api/v1/router.py` — mounts all endpoints under `/api/v1`.
 - `backend/app/api/v1/endpoints/` — auth, admin, academic, attendance, corrections, profile, professor tools, sessions, face, reports, timetable.
 - `backend/app/core/` — config, security (bcrypt, JWT, Fernet), RBAC dependencies, error envelopes, rate limiting, proxy handling.
@@ -148,7 +148,7 @@ Initial `AUDIT.md` written before implementation. Results and actual test output
 - **A-08**: audit-log normalizer now reads `actor_user_id`, `before_json`, and `after_json`.
 - **A-10**: added `correction_reason` to `ReportRecordOut` and `record_to_report()`.
 - **A-13**: added configurable `RATE_LIMIT_STORAGE_URI`; deployments can use `redis://...` for shared limits. Default remains process-local storage.
-- **A-14**: API container now runs `alembic upgrade head` before Uvicorn and honors `PORT` from the host.
+- **A-14**: API now runs Alembic migrations at FastAPI startup via `run_database_migrations()` using the running API's `DATABASE_URL`, then checks readiness; the Docker/Render command no longer invokes the Alembic CLI before Uvicorn, and the host's `PORT` is honored.
 - **A-15**: removed stale InsightFace requirements, model download, image libraries, and `face_models` volume. Updated README and architecture docs to describe browser-side `face-api.js` processing.
 - **A-16**: removed redundant face-specific Vercel rewrites.
 - **A-17**: fixed `.gitignore` ordering so `!**/.env.example` takes effect.
@@ -224,3 +224,10 @@ Initial `AUDIT.md` written before implementation. Results and actual test output
 
 - `py -m pytest -q` in `backend`: 57 passed; `py -m ruff check app tests`: clean.
 - Frontend `npm run lint`, `npx tsc --noEmit`, and `npm run build`: all passed; `npm run build` generated 40 static pages with `/professor/sessions/[id]` dynamic.
+
+## 11. Deployment migration timing
+
+- `backend/app/main.py` calls `run_database_migrations()` during FastAPI startup in non-test environments, then `verify_database_readiness()` only checks the database and `alembic_version` afterward. Migrations use the same `DATABASE_URL` as the running API.
+- Docker/Render CMD no longer runs `alembic upgrade head` before Uvicorn; Uvicorn startup handles migrations.
+- Vercel's `buildCommand` in `vercel.json` is now an echo instead of `alembic upgrade head`. Build-time migrations targeted a different/ephemeral database and caused `Database has not been migrated` at runtime.
+- `DATABASE_URL` must point to the production PostgreSQL database used at runtime; if it is missing or wrong, startup fails with a config/migration error. All other deployment guidance remains unchanged.

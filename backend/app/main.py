@@ -6,7 +6,9 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +19,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from alembic import command as alembic_command
 from app.api.v1.endpoints import health
 from app.api.v1.router import api_router
 from app.core.config import Settings, settings
@@ -74,12 +77,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def run_database_migrations() -> None:
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    alembic_config = AlembicConfig(str(alembic_ini))
+    alembic_config.set_main_option("script_location", str(alembic_ini.parent / "alembic"))
+    alembic_command.upgrade(alembic_config, "head")
+
+
 def verify_database_readiness() -> None:
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
         table_names = set(inspect(connection).get_table_names())
         if "alembic_version" not in table_names:
-            raise RuntimeError("Database has not been migrated. Run 'alembic upgrade head' before starting the API.")
+            raise RuntimeError("Database has not been migrated. Check DATABASE_URL and startup migration logs.")
 
 
 async def face_retention_task() -> None:
@@ -113,6 +123,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     retention_task: asyncio.Task[None] | None = None
     scheduled_export_runner: asyncio.Task[None] | None = None
     if not settings.is_testing:
+        run_database_migrations()
         verify_database_readiness()
         if settings.face_retention_days > 0:
             retention_task = asyncio.create_task(face_retention_task())

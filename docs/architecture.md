@@ -12,7 +12,7 @@ flowchart LR
 
 The frontend is a Next.js client application. It keeps access tokens in memory and calls the FastAPI REST API. A rotating refresh token is stored in an HttpOnly cookie scoped to `/api/v1/auth`.
 
-FastAPI owns all authorization decisions. SQLAlchemy models and an Alembic migration define the relational schema. Business logic lives in service modules rather than endpoint handlers.
+FastAPI owns all authorization decisions. SQLAlchemy models and an Alembic migration define the relational schema; at startup the API runs Alembic via `run_database_migrations()` before `verify_database_readiness()`, which only checks the result. Business logic lives in service modules rather than endpoint handlers.
 
 ## Core data model
 
@@ -67,6 +67,6 @@ Audit entries record actor, action, entity, before/after JSON, reason, IP, and u
 
 ## Deployment
 
-Production requires PostgreSQL, HTTPS, unique secrets, constrained CORS origins, a trusted proxy configuration, and a shared rate-limit store when running multiple instances. The provided Compose stack is for local development and a deployment reference; it includes migrations, conditional development seeding, and persistent database storage.
+Production requires PostgreSQL, HTTPS, unique secrets, constrained CORS origins, a trusted proxy configuration, and a shared rate-limit store when running multiple instances. `DATABASE_URL` must be set to the production PostgreSQL database used at runtime; if it is missing or wrong, startup fails with a config/migration error. The provided Compose stack is for local development and a deployment reference; it includes startup migrations, conditional development seeding, and persistent database storage.
 
-The API container runs `alembic upgrade head` before Uvicorn and uses `PORT` when supplied by the host. Both Compose and Vercel install only `backend/requirements.txt`; no Python face-model stack is needed because recognition runs in the browser. The legacy `face_model_unavailable` error is no longer part of the API contract.
+The Docker/Render command no longer runs the Alembic CLI before Uvicorn. Uvicorn startup calls `run_database_migrations()` in `backend/app/main.py`, applying migrations with the same `DATABASE_URL` as the running API; `verify_database_readiness()` runs afterward only as a check. Vercel no longer runs `alembic upgrade head` as a build command (`vercel.json` uses an echo build command), because build-time migrations targeted a different/ephemeral database and caused `Database has not been migrated` at runtime. The container uses `PORT` when supplied by the host. Both Compose and Vercel install only `backend/requirements.txt`; no Python face-model stack is needed because recognition runs in the browser. The legacy `face_model_unavailable` error is no longer part of the API contract.
