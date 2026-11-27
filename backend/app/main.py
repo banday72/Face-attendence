@@ -291,6 +291,29 @@ if _startup_error is None:
   except Exception:
     _startup_error = traceback.format_exc()
     logger.exception("Application startup failed")
-    app = None
-else:
-  app = None
+
+if _startup_error is not None:
+    async def _startup_error_app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                if message["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+        if scope["type"] != "http":
+            return
+        body = json.dumps(
+            {"detail": "Application startup failed", "startup_error": _startup_error[-12000:]}
+        ).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 500,
+                "headers": [(b"content-type", b"application/json")],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+
+    app = _startup_error_app
