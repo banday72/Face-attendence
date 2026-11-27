@@ -44,7 +44,7 @@ from app.services.face_service import purge_expired_embeddings
 _vercel_app_ready = False
 
 
-def _vercel_proxy_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
+def _vercel_proxy_handler_impl(event: dict[str, Any]) -> dict[str, Any]:
     global _vercel_app_ready
     if not _vercel_app_ready:
         run_database_migrations()
@@ -92,6 +92,18 @@ def _vercel_proxy_handler(event: dict[str, Any], _context: Any) -> dict[str, Any
         result["body"] = base64.b64encode(response_body).decode()
         result["encoding"] = "base64"
     return result
+
+
+def _vercel_proxy_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
+    try:
+        return _vercel_proxy_handler_impl(event)
+    except Exception:
+        logger.exception("Vercel handler failed")
+        return {
+            "statusCode": 500,
+            "headers": {"content-type": "application/json"},
+            "body": json.dumps({"detail": "Internal Server Error"}),
+        }
 
 
 _vc_init = sys.modules.get("vercel_runtime.vc_init")
