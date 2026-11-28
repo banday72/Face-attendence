@@ -48,7 +48,7 @@ import {
 import { ApiError, api, errorMessage } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
 import { normalizeDepartment, normalizePaginated, normalizeUser } from "@/lib/normalize";
-import type { Department, InviteCreated, Role, User } from "@/lib/types";
+import type { Department, Role, User } from "@/lib/types";
 import { initials } from "@/lib/utils";
 
 interface UserForm {
@@ -85,26 +85,6 @@ function emptyForm(role: Role = "student"): UserForm {
   };
 }
 
-interface InviteForm {
-  full_name: string;
-  email: string;
-  university_id: string;
-  department_id: string;
-  program: string;
-  year_level: string;
-}
-
-function emptyInviteForm(): InviteForm {
-  return {
-    full_name: "",
-    email: "",
-    university_id: "",
-    department_id: "",
-    program: "",
-    year_level: "",
-  };
-}
-
 const roleVariant: Record<Role, "purple" | "info" | "warning"> = {
   student: "purple",
   professor: "info",
@@ -130,12 +110,8 @@ export default function UsersPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState<InviteForm>(emptyInviteForm());
-  const [inviteFieldErrors, setInviteFieldErrors] = useState<Record<string, string>>({});
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteSaving, setInviteSaving] = useState(false);
-  const [createdInvite, setCreatedInvite] = useState<InviteCreated | null>(null);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [registrationUrl, setRegistrationUrl] = useState("");
 
   useEffect(() => {
     const querySearch = new URLSearchParams(window.location.search).get("search");
@@ -143,6 +119,7 @@ export default function UsersPage() {
       setSearch(querySearch);
       setPage(1);
     }
+    setRegistrationUrl(`${window.location.origin}/register`);
   }, []);
 
   const loader = useCallback(
@@ -194,12 +171,9 @@ export default function UsersPage() {
     setDialogOpen(true);
   };
 
-  const openInvite = () => {
-    setInviteForm(emptyInviteForm());
-    setInviteFieldErrors({});
-    setInviteError(null);
-    setCreatedInvite(null);
-    setInviteOpen(true);
+  const openRegistrationLink = () => {
+    setRegistrationUrl(`${window.location.origin}/register`);
+    setRegistrationOpen(true);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -299,44 +273,11 @@ export default function UsersPage() {
     }
   };
 
-  const handleInviteSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const nextErrors: Record<string, string> = {};
-    if (inviteForm.full_name.trim().length < 2) nextErrors.full_name = "Full name is required.";
-    if (!/^\S+@\S+\.\S+$/.test(inviteForm.email)) nextErrors.email = "Enter a valid email.";
-    if (inviteForm.university_id.trim().length < 3) {
-      nextErrors.university_id = "University ID is required.";
-    }
-    setInviteFieldErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
-
-    setInviteSaving(true);
-    setInviteError(null);
+  const copyRegistrationLink = async () => {
+    if (!registrationUrl) return;
     try {
-      const payload = {
-        full_name: inviteForm.full_name.trim(),
-        email: inviteForm.email.trim().toLowerCase(),
-        university_id: inviteForm.university_id.trim(),
-        department_id: inviteForm.department_id || null,
-        program: inviteForm.program.trim() || null,
-        year_level: inviteForm.year_level ? Number(inviteForm.year_level) : null,
-      };
-      const invite = await api.post<InviteCreated>("/admin/invites", payload);
-      setCreatedInvite(invite);
-      toast.success("Invite link created");
-    } catch (error) {
-      setInviteError(errorMessage(error));
-      if (error instanceof ApiError) setInviteFieldErrors(error.fields);
-    } finally {
-      setInviteSaving(false);
-    }
-  };
-
-  const copyInviteLink = async () => {
-    if (!createdInvite) return;
-    try {
-      await navigator.clipboard.writeText(createdInvite.url);
-      toast.success("Invite link copied");
+      await navigator.clipboard.writeText(registrationUrl);
+      toast.success("Registration link copied");
     } catch {
       toast.error("Clipboard unavailable. Copy the link manually.");
     }
@@ -356,8 +297,8 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload /> Bulk import
             </Button>
-            <Button variant="outline" onClick={openInvite}>
-              <Link2 /> Invite student
+            <Button variant="outline" onClick={openRegistrationLink}>
+              <Link2 /> Registration link
             </Button>
             <Button variant="outline" onClick={() => openCreate("professor")}>
               <Plus /> Add professor
@@ -663,139 +604,39 @@ export default function UsersPage() {
       </Dialog>
 
       <Dialog
-        open={inviteOpen}
+        open={registrationOpen}
         onOpenChange={(open) => {
-          if (!open) {
-            setInviteOpen(false);
-            setCreatedInvite(null);
-          }
+          if (!open) setRegistrationOpen(false);
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite a student</DialogTitle>
+            <DialogTitle>Student registration link</DialogTitle>
             <DialogDescription>
-              Generate a single-use link that expires in 7 days. The student will create
-              their password and register their face before entering the dashboard.
+              Share this one link with all students. Each student fills their own details, creates
+              their account, and then registers their face. Every submission is stored separately.
             </DialogDescription>
           </DialogHeader>
-
-          {createdInvite ? (
-            <div className="space-y-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <QrDisplay payload={createdInvite.url} size={150} />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <p className="text-sm font-medium">{createdInvite.full_name}</p>
-                  <p className="break-all rounded-md border border-border bg-muted/30 p-2 font-mono text-[11px]">
-                    {createdInvite.url}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Send this link or QR code to the student. It can only be used once.
-                  </p>
-                  <Button variant="outline" size="sm" onClick={() => void copyInviteLink()}>
-                    <Copy /> Copy link
-                  </Button>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={() => setInviteOpen(false)}>Done</Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            <form onSubmit={handleInviteSubmit} className="grid gap-4 sm:grid-cols-2" noValidate>
-              <FormField label="Full name" htmlFor="invite-name" required error={inviteFieldErrors.full_name}>
-                <Input
-                  id="invite-name"
-                  value={inviteForm.full_name}
-                  onChange={(event) =>
-                    setInviteForm((current) => ({ ...current, full_name: event.target.value }))
-                  }
-                />
-              </FormField>
-              <FormField label="Email" htmlFor="invite-email" required error={inviteFieldErrors.email}>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={inviteForm.email}
-                  onChange={(event) =>
-                    setInviteForm((current) => ({ ...current, email: event.target.value }))
-                  }
-                />
-              </FormField>
-              <FormField
-                label="University ID"
-                htmlFor="invite-uid"
-                required
-                error={inviteFieldErrors.university_id}
-              >
-                <Input
-                  id="invite-uid"
-                  value={inviteForm.university_id}
-                  onChange={(event) =>
-                    setInviteForm((current) => ({ ...current, university_id: event.target.value }))
-                  }
-                />
-              </FormField>
-              <FormField label="Program" htmlFor="invite-program" error={inviteFieldErrors.program}>
-                <Input
-                  id="invite-program"
-                  value={inviteForm.program}
-                  onChange={(event) =>
-                    setInviteForm((current) => ({ ...current, program: event.target.value }))
-                  }
-                  placeholder="e.g. Computer Science"
-                />
-              </FormField>
-              <FormField label="Year level" htmlFor="invite-year" error={inviteFieldErrors.year_level}>
-                <Input
-                  id="invite-year"
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={inviteForm.year_level}
-                  onChange={(event) =>
-                    setInviteForm((current) => ({ ...current, year_level: event.target.value }))
-                  }
-                />
-              </FormField>
-              <FormField label="Department" htmlFor="invite-department">
-                <Select
-                  value={inviteForm.department_id || "none"}
-                  onValueChange={(value) =>
-                    setInviteForm((current) => ({
-                      ...current,
-                      department_id: value === "none" ? "" : value,
-                    }))
-                  }
-                >
-                  <SelectTrigger id="invite-department">
-                    <SelectValue placeholder="No department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No department</SelectItem>
-                    {(departments.data ?? []).map((department) => (
-                      <SelectItem key={department.id} value={department.id}>
-                        {department.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-              {inviteError ? (
-                <p className="sm:col-span-2 rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
-                  {inviteError}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <QrDisplay payload={registrationUrl} size={150} />
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-sm font-medium">Common registration URL</p>
+                <p className="break-all rounded-md border border-border bg-muted/30 p-2 font-mono text-[11px]">
+                  {registrationUrl}
                 </p>
-              ) : null}
-              <DialogFooter className="sm:col-span-2">
-                <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>
-                  Cancel
+                <p className="text-xs text-muted-foreground">
+                  Anyone with this link can create a student account, so share it only with your class.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => void copyRegistrationLink()}>
+                  <Copy /> Copy link
                 </Button>
-                <Button type="submit" loading={inviteSaving}>
-                  Create invite link
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setRegistrationOpen(false)}>Done</Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

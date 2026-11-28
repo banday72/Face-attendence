@@ -503,7 +503,19 @@ export interface RegisterPayload {
   email: string;
   university_id: string;
   password: string;
-  department_id?: string;
+  department_id?: string | null;
+  program?: string | null;
+  year_level?: number | null;
+}
+
+export interface DepartmentOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface RegistrationOptions {
+  departments: DepartmentOption[];
 }
 
 export interface InviteDetails {

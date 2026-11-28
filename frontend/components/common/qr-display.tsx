@@ -67,7 +67,7 @@ export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: nu
   return (
     <div className="rounded-lg border border-border bg-cream p-3 shadow-soft" style={{ width: size + 24 }}>
       {image ? (
-        <img src={image} alt="Session QR code" width={size} height={size} className="rounded-lg" />
+        <img src={image} alt="QR code" width={size} height={size} className="rounded-lg" />
       ) : (
         <div className="animate-pulse rounded-lg bg-muted" style={{ width: size, height: size }} />
       )}

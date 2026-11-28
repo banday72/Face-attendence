@@ -25,6 +25,7 @@ class RegisterIn(StrictModel):
     password: str
     full_name: str = Field(min_length=2, max_length=150)
     university_id: str = Field(min_length=3, max_length=50)
+    department_id: str | None = None
     program: str | None = Field(default=None, max_length=120)
     year_level: int | None = Field(default=None, ge=1, le=8)
 
@@ -66,6 +67,16 @@ class MeOut(UserOut):
 
 class AuthOut(AccessTokenOut):
     user: MeOut
+
+
+class PublicDepartmentOut(ORMModel):
+    id: str
+    name: str
+    code: str
+
+
+class RegistrationOptionsOut(StrictModel):
+    departments: list[PublicDepartmentOut]
 
 
 InviteStatus = Literal["pending", "used", "revoked", "expired"]

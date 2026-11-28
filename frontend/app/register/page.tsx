@@ -9,15 +9,23 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, errorMessage } from "@/lib/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ApiError, api, errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import type { DepartmentOption, RegistrationOptions } from "@/lib/types";
 
 interface FormState {
   full_name: string;
@@ -25,6 +33,9 @@ interface FormState {
   email: string;
   password: string;
   confirmPassword: string;
+  department_id: string;
+  program: string;
+  year_level: string;
 }
 
 const initialState: FormState = {
@@ -33,16 +44,34 @@ const initialState: FormState = {
   email: "",
   password: "",
   confirmPassword: "",
+  department_id: "",
+  program: "",
+  year_level: "",
 };
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, login } = useAuth();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(initialState);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState | "consent", string>>>({});
   const [serverError, setServerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void api
+      .get<RegistrationOptions>("/auth/registration-options", {
+        skipAuth: true,
+        signal: controller.signal,
+      })
+      .then((options) => {
+        if (!controller.signal.aborted) setDepartments(options.departments);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
   const update = (key: keyof FormState, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -65,6 +94,10 @@ export default function RegisterPage() {
       next.password = "Include an uppercase letter, a lowercase letter, and a number.";
     }
     if (form.password !== form.confirmPassword) next.confirmPassword = "Passwords do not match.";
+    if (form.year_level) {
+      const year = Number(form.year_level);
+      if (!Number.isInteger(year) || year < 1 || year > 8) next.year_level = "Use 1 to 8.";
+    }
     if (!consent) next.consent = "Please accept the account terms to continue.";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -76,15 +109,20 @@ export default function RegisterPage() {
     if (!validate()) return;
 
     setSubmitting(true);
+    const email = form.email.trim().toLowerCase();
     try {
       await register({
         full_name: form.full_name.trim(),
         university_id: form.university_id.trim(),
-        email: form.email.trim().toLowerCase(),
+        email,
         password: form.password,
+        department_id: form.department_id || null,
+        program: form.program.trim() || null,
+        year_level: form.year_level ? Number(form.year_level) : null,
       });
-      toast.success("Account created. Sign in to continue.");
-      router.replace("/login");
+      await login(email, form.password);
+      toast.success("Account created. Complete your face registration next.");
+      router.replace("/student/face-register");
     } catch (caught) {
       const message = errorMessage(caught);
       setServerError(message);
@@ -131,7 +169,8 @@ export default function RegisterPage() {
               </div>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
-              Create your student account to access classes, check-ins, and attendance history.
+              Create your student account with your own details. After submitting, you will be
+              asked to register your face for attendance check-in.
             </p>
           </div>
 
@@ -172,6 +211,51 @@ export default function RegisterPage() {
                   aria-invalid={Boolean(errors.email)}
                 />
                 {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="department_id">Department</Label>
+                <Select
+                  value={form.department_id || "none"}
+                  onValueChange={(value) => update("department_id", value === "none" ? "" : value)}
+                >
+                  <SelectTrigger id="department_id">
+                    <SelectValue placeholder="No department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No department</SelectItem>
+                    {departments.map((department) => (
+                      <SelectItem key={department.id} value={department.id}>
+                        {department.name} ({department.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="program">Program</Label>
+                <Input
+                  id="program"
+                  value={form.program}
+                  onChange={(event) => update("program", event.target.value)}
+                  placeholder="e.g. Computer Science"
+                  aria-invalid={Boolean(errors.program)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="year_level">Year level</Label>
+                <Input
+                  id="year_level"
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={form.year_level}
+                  onChange={(event) => update("year_level", event.target.value)}
+                  placeholder="1"
+                  aria-invalid={Boolean(errors.year_level)}
+                />
+                {errors.year_level ? (
+                  <p className="text-xs text-destructive">{errors.year_level}</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -215,7 +299,7 @@ export default function RegisterPage() {
                   I confirm this information is accurate and agree to the campus attendance policy.
                 </Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Biometric features, if used later, require a separate explicit consent.
+                  Biometric features require a separate explicit consent during face registration.
                 </p>
                 {errors.consent ? <p className="mt-1 text-xs text-destructive">{errors.consent}</p> : null}
               </div>

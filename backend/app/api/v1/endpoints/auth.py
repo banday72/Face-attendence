@@ -44,7 +44,9 @@ from app.schemas.auth import (
     InviteRegisterIn,
     LoginIn,
     MeOut,
+    PublicDepartmentOut,
     RegisterIn,
+    RegistrationOptionsOut,
     Role,
     UserOut,
 )
@@ -128,6 +130,14 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     )
 
 
+@router.get("/registration-options", response_model=RegistrationOptionsOut)
+def registration_options(db: DB_Dependency) -> RegistrationOptionsOut:
+    departments = db.scalars(select(Department).order_by(Department.name)).all()
+    return RegistrationOptionsOut(
+        departments=[PublicDepartmentOut.model_validate(department) for department in departments]
+    )
+
+
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 @register_limit
 def register(payload: RegisterIn, request: Request, response: Response, db: DB_Dependency) -> User:
@@ -136,6 +146,9 @@ def register(payload: RegisterIn, request: Request, response: Response, db: DB_D
         raise AppError(409, "conflict", "An account with this email already exists")
     if db.scalar(select(Student).where(Student.university_id == payload.university_id)):
         raise AppError(409, "conflict", "University ID is already registered")
+    department = db.get(Department, payload.department_id) if payload.department_id else None
+    if payload.department_id and department is None:
+        raise AppError(404, "not_found", "Department not found")
 
     user = User(
         id=new_uuid(),
@@ -152,6 +165,7 @@ def register(payload: RegisterIn, request: Request, response: Response, db: DB_D
         id=new_uuid(),
         user_id=user.id,
         university_id=payload.university_id,
+        department_id=department.id if department else None,
         program=payload.program,
         year_level=payload.year_level,
         created_at=utcnow(),
@@ -165,7 +179,12 @@ def register(payload: RegisterIn, request: Request, response: Response, db: DB_D
         entity_type="user",
         entity_id=user.id,
         actor=user,
-        after={"email": user.email, "role": user.role, "university_id": student.university_id},
+        after={
+            "email": user.email,
+            "role": user.role,
+            "university_id": student.university_id,
+            "department_id": student.department_id,
+        },
         reason="Student self-registration",
         request=request,
     )

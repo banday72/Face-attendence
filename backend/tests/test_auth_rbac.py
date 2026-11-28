@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import DEFAULT_FACE_ENCRYPTION_KEY, DEFAULT_JWT_SECRET, Settings
 from app.core.security import hash_token
-from app.models import RefreshToken, User
-from app.utils.uuid import utcnow
+from app.models import Department, RefreshToken, Student, User
+from app.utils.uuid import new_uuid, utcnow
 from tests.conftest import (
     create_user,
     login_headers,
@@ -214,3 +214,44 @@ def test_audit_ip_uses_proxy_header_only_for_trusted_proxy(client: TestClient, d
     log2 = db_session.scalar(select(AuditLog).where(AuditLog.action == "department.create", AuditLog.entity_id == dept2.json()["id"]))
     assert log2 is not None
     assert log2.ip_address == "203.0.113.10"
+
+
+def test_shared_registration_link_creates_independent_students(client, db_session) -> None:
+    department = Department(
+        id=new_uuid(),
+        name="Computer Science",
+        code="CS",
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db_session.add(department)
+    db_session.commit()
+
+    options = client.get("/api/v1/auth/registration-options")
+    assert options.status_code == 200
+    assert any(item["id"] == department.id for item in options.json()["departments"])
+
+    emails = ["student.one@university.edu", "student.two@university.edu"]
+    university_ids = ["STU-SHARED-1", "STU-SHARED-2"]
+    for email, university_id in zip(emails, university_ids):
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": email,
+                "password": "Student123!",
+                "full_name": email.split("@")[0].replace(".", " ").title(),
+                "university_id": university_id,
+                "department_id": department.id,
+                "program": "BSc CS",
+                "year_level": 1,
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["role"] == "student"
+
+    users = db_session.scalars(select(User).where(User.email.in_(emails))).all()
+    students = db_session.scalars(select(Student).where(Student.university_id.in_(university_ids))).all()
+    assert len(users) == 2
+    assert len(students) == 2
+    assert {student.user_id for student in students} == {user.id for user in users}
+    assert all(student.department_id == department.id for student in students)
