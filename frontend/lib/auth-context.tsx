@@ -21,6 +21,7 @@ interface AuthContextValue {
   user: User | null;
   status: AuthStatus;
   login: (email: string, password: string) => Promise<User>;
+  acceptAuth: (payload: unknown) => User;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<boolean>;
@@ -44,7 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     if (status === "authenticated") return;
-    if (pathname === "/login" || pathname === "/register") {
+    if (
+      pathname === "/login" ||
+      pathname === "/register" ||
+      pathname.startsWith("/join/")
+    ) {
       setStatus("unauthenticated");
       return () => {
         active = false;
@@ -70,6 +75,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("auth:unauthorized", clearSession);
   }, [clearSession]);
 
+  const acceptAuth = useCallback((payload: unknown): User => {
+    const envelope = isRecord(payload) ? payload : {};
+    const token = pick(envelope, ["access_token", "accessToken", "token"]);
+    if (!token || !isRecord(envelope.user)) {
+      throw new Error("The server did not return a complete session.");
+    }
+    const profile = normalizeUser(envelope.user);
+    setAccessToken(token);
+    setUser(profile);
+    setStatus("authenticated");
+    return profile;
+  }, []);
+
   const login = useCallback(
     async (email: string, password: string): Promise<User> => {
       const payload = await api.post<unknown>(
@@ -77,18 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { email, password },
         { skipAuth: true },
       );
-      const envelope = isRecord(payload) ? payload : {};
-      const token = pick(envelope, ["access_token", "accessToken", "token"]);
-      if (!token || !isRecord(envelope.user)) {
-        throw new Error("The server did not return a complete session.");
-      }
-      const profile = normalizeUser(envelope.user);
-      setAccessToken(token);
-      setUser(profile);
-      setStatus("authenticated");
-      return profile;
+      return acceptAuth(payload);
     },
-    [],
+    [acceptAuth],
   );
 
   const register = useCallback(async (payload: RegisterPayload) => {
@@ -118,13 +127,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       status,
       login,
+      acceptAuth,
       register,
       logout,
       refresh,
       hasRole: (roles: Role[]) => (user ? roles.includes(user.role) : false),
       updateUser: setUser,
     }),
-    [user, status, login, register, logout, refresh],
+    [user, status, login, acceptAuth, register, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

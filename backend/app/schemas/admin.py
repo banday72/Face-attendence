@@ -123,6 +123,15 @@ class SemesterOut(ORMModel):
     created_at: datetime
 
 
+class InviteCreate(StrictModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=150)
+    university_id: str = Field(min_length=3, max_length=50)
+    department_id: str | None = None
+    program: str | None = Field(default=None, max_length=120)
+    year_level: int | None = Field(default=None, ge=1, le=8)
+
+
 class UserCreate(StrictModel):
     email: EmailStr
     password: str

@@ -506,6 +506,31 @@ export interface RegisterPayload {
   department_id?: string;
 }
 
+export interface InviteDetails {
+  full_name: string;
+  email: string;
+  university_id: string;
+  program: string | null;
+  year_level: number | null;
+  department_id: string | null;
+  department_name: string | null;
+  expires_at: string;
+}
+
+export interface InviteCreated {
+  id: string;
+  full_name: string;
+  email: string;
+  university_id: string;
+  program: string | null;
+  year_level: number | null;
+  department_name: string | null;
+  status: string;
+  token: string;
+  url: string;
+  expires_at: string;
+}
+
 export type CorrectionStatus = "pending" | "approved" | "rejected";
 
 export interface CorrectionRequestPayload {

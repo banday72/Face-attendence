@@ -69,7 +69,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["session_id"],
             ["attendance_sessions.id"],
-            name="fk_attendance_correction_requests_session_id_attendance_sessions",
+            name="fk_correction_requests_session_id_sessions",
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(

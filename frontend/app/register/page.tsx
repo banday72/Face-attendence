@@ -25,7 +25,6 @@ interface FormState {
   email: string;
   password: string;
   confirmPassword: string;
-  department_id: string;
 }
 
 const initialState: FormState = {
@@ -34,7 +33,6 @@ const initialState: FormState = {
   email: "",
   password: "",
   confirmPassword: "",
-  department_id: "",
 };
 
 export default function RegisterPage() {
@@ -56,7 +54,16 @@ export default function RegisterPage() {
     if (form.full_name.trim().length < 3) next.full_name = "Enter your full name.";
     if (!form.university_id.trim()) next.university_id = "University ID is required.";
     if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = "Enter a valid email address.";
-    if (form.password.length < 8) next.password = "Use at least 8 characters.";
+    const byteLength = new TextEncoder().encode(form.password).length;
+    if (byteLength < 8 || byteLength > 72) {
+      next.password = "Use 8 to 72 characters.";
+    } else if (
+      !/[A-Z]/.test(form.password) ||
+      !/[a-z]/.test(form.password) ||
+      !/\d/.test(form.password)
+    ) {
+      next.password = "Include an uppercase letter, a lowercase letter, and a number.";
+    }
     if (form.password !== form.confirmPassword) next.confirmPassword = "Passwords do not match.";
     if (!consent) next.consent = "Please accept the account terms to continue.";
     setErrors(next);
@@ -75,7 +82,6 @@ export default function RegisterPage() {
         university_id: form.university_id.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password,
-        department_id: form.department_id.trim() || undefined,
       });
       toast.success("Account created. Sign in to continue.");
       router.replace("/login");
@@ -166,15 +172,6 @@ export default function RegisterPage() {
                   aria-invalid={Boolean(errors.email)}
                 />
                 {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="department_id">Department ID <span className="text-muted-foreground">(optional)</span></Label>
-                <Input
-                  id="department_id"
-                  value={form.department_id}
-                  onChange={(event) => update("department_id", event.target.value)}
-                  placeholder="Ask your coordinator"
-                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>

@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 import sys
+import threading
 import time
 import traceback
 import uuid
@@ -15,6 +16,8 @@ from typing import Any
 
 _startup_error: str | None = None
 _migration_error: str | None = None
+_migration_lock = threading.Lock()
+_migrations_ready = False
 app: Any = None
 
 try:
@@ -105,25 +108,16 @@ def _vercel_proxy_handler(event: dict[str, Any], _context: Any) -> dict[str, Any
             return {
                 "statusCode": 500,
                 "headers": {"content-type": "application/json"},
-                "body": json.dumps(
-                    {
-                        "detail": "Application startup failed",
-                        "startup_error": _startup_error[-12000:],
-                    }
-                ),
+                "body": json.dumps({"detail": "Application startup failed"}),
             }
+        _ensure_database_ready()
         return _vercel_proxy_handler_impl(event)
     except Exception:
         logger.exception("Vercel handler failed")
         return {
             "statusCode": 500,
             "headers": {"content-type": "application/json"},
-            "body": json.dumps(
-                {
-                    "detail": "Internal Server Error",
-                    "traceback": traceback.format_exc()[-12000:],
-                }
-            ),
+            "body": json.dumps({"detail": "Internal Server Error"}),
         }
 
 
@@ -178,7 +172,11 @@ if _startup_error is None:
       alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
       alembic_config = AlembicConfig(str(alembic_ini))
       alembic_config.set_main_option("script_location", str(alembic_ini.parent / "alembic"))
-      alembic_command.upgrade(alembic_config, "head")
+      with engine.begin() as connection:
+          if engine.dialect.name == "postgresql":
+              connection.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": 724928113})
+          alembic_config.attributes["connection"] = connection
+          alembic_command.upgrade(alembic_config, "head")
 
 
   def verify_database_readiness() -> None:
@@ -187,6 +185,22 @@ if _startup_error is None:
           table_names = set(inspect(connection).get_table_names())
           if "alembic_version" not in table_names:
               raise RuntimeError("Database has not been migrated. Check DATABASE_URL and startup migration logs.")
+
+
+  def ensure_database_ready() -> None:
+      global _migrations_ready
+      if settings.is_testing or _migrations_ready:
+          return
+      with _migration_lock:
+          if _migrations_ready:
+              return
+          run_database_migrations()
+          verify_database_readiness()
+          _migrations_ready = True
+
+
+  def _ensure_database_ready() -> None:
+      ensure_database_ready()
 
 
   async def face_retention_task() -> None:
@@ -222,8 +236,7 @@ if _startup_error is None:
       scheduled_export_runner: asyncio.Task[None] | None = None
       if not settings.is_testing:
           try:
-              run_database_migrations()
-              verify_database_readiness()
+              ensure_database_ready()
           except Exception:
               _migration_error = traceback.format_exc()
               logger.exception("Startup migration failed")
@@ -303,7 +316,7 @@ if _startup_error is not None:
         async def _startup_error_route(path: str):
             return _JSONResponse(
                 status_code=500,
-                content={"detail": "Application startup failed", "startup_error": _startup_error[-12000:]},
+                content={"detail": "Application startup failed"},
             )
 
         app = _err_app
@@ -320,9 +333,7 @@ if _startup_error is not None:
                         return
             if scope["type"] != "http":
                 return
-            body = json.dumps(
-                {"detail": "Application startup failed", "startup_error": _startup_error[-12000:]}
-            ).encode()
+            body = json.dumps({"detail": "Application startup failed"}).encode()
             await send(
                 {
                     "type": "http.response.start",

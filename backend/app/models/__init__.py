@@ -17,6 +17,7 @@ from app.models.face_embedding import FaceEmbedding
 from app.models.professor import Professor
 from app.models.qr_token_usage import QRTokenUsage
 from app.models.refresh_token import RefreshToken
+from app.models.registration_invite import RegistrationInvite
 from app.models.report_preset import ReportPreset
 from app.models.schedule import Schedule
 from app.models.scheduled_export_run import ScheduledExportRun
@@ -42,6 +43,7 @@ __all__ = [
     "Professor",
     "QRTokenUsage",
     "RefreshToken",
+    "RegistrationInvite",
     "ReportPreset",
     "Schedule",
     "ScheduledExportRun",

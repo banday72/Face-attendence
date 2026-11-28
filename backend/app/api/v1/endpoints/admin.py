@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal, cast
 
 from fastapi import (
@@ -26,7 +26,7 @@ from app.core.config import settings
 from app.core.deps import DB_Dependency, require_admin
 from app.core.errors import AppError
 from app.core.rate_limit import face_register_limit
-from app.core.security import hash_password
+from app.core.security import hash_password, hash_token
 from app.models import (
     AttendanceRecord,
     AttendanceSession,
@@ -39,6 +39,7 @@ from app.models import (
     Enrollment,
     Professor,
     RefreshToken,
+    RegistrationInvite,
     Schedule,
     Semester,
     Student,
@@ -69,6 +70,7 @@ from app.schemas.admin import (
     EnrollmentCreate,
     EnrollmentOut,
     FacultyOut,
+    InviteCreate,
     PasswordResetIn,
     ProfessorOptionOut,
     ScheduleCreate,
@@ -82,10 +84,10 @@ from app.schemas.admin import (
     UserCreate,
     UserUpdate,
 )
-from app.schemas.auth import Role
+from app.schemas.auth import InviteCreatedOut, InviteOut, Role
 from app.schemas.common import Page, apply_sort, paginate
 from app.schemas.face import AdminFaceRegisterIn, FaceRegisterOut, FaceStatusOut
-from app.services import class_service, face_service
+from app.services import class_service, face_service, invite_service
 from app.utils.uuid import new_uuid, utcnow
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -742,6 +744,125 @@ def create_user(
     payload: UserCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
 ) -> UserAdminOut:
     return _user_out(db, _create_user_record(db, payload, actor, request))
+
+
+def _invite_out(db: Session, invite: RegistrationInvite) -> InviteOut:
+    return InviteOut(
+        id=invite.id,
+        full_name=invite.full_name,
+        email=invite.email,
+        university_id=invite.university_id,
+        department_id=invite.department_id,
+        department_name=_department_name(db, invite.department_id),
+        program=invite.program,
+        year_level=invite.year_level,
+        status=invite_service.invite_status(invite),
+        expires_at=invite.expires_at,
+        created_at=invite.created_at,
+        used_at=invite.used_at,
+        revoked_at=invite.revoked_at,
+    )
+
+
+@router.get("/invites", response_model=Page[InviteOut])
+def list_invites(
+    db: DB_Dependency,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    sort_by: Literal["created_at", "expires_at", "full_name", "email"] = "created_at",
+    sort_order: Literal["asc", "desc"] = "desc",
+) -> Page[InviteOut]:
+    params = pagination(page, page_size, sort_by, sort_order)
+    query = apply_sort(select(RegistrationInvite), getattr(RegistrationInvite, sort_by), params)
+    result = paginate(db, query, params)
+    return Page[InviteOut](
+        items=[_invite_out(db, invite) for invite in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
+@router.post("/invites", response_model=InviteCreatedOut, status_code=status.HTTP_201_CREATED)
+def create_invite(
+    payload: InviteCreate, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
+) -> InviteCreatedOut:
+    email = str(payload.email).lower()
+    _check_unique(db, User, User.email, email, "Email")
+    _check_unique(db, Student, Student.university_id, payload.university_id, "University ID")
+    if payload.department_id:
+        _get_or_404(db, Department, payload.department_id, "Department")
+
+    now = utcnow()
+    active = db.scalar(
+        select(RegistrationInvite).where(
+            or_(
+                RegistrationInvite.email == email,
+                RegistrationInvite.university_id == payload.university_id,
+            ),
+            RegistrationInvite.used_at.is_(None),
+            RegistrationInvite.revoked_at.is_(None),
+            RegistrationInvite.expires_at > now,
+        )
+    )
+    if active is not None:
+        raise AppError(409, "conflict", "An active invite already exists for this student")
+
+    token = invite_service.new_invite_token()
+    invite = RegistrationInvite(
+        id=new_uuid(),
+        token_hash=hash_token(token),
+        full_name=payload.full_name,
+        email=email,
+        university_id=payload.university_id,
+        department_id=payload.department_id,
+        program=payload.program,
+        year_level=payload.year_level,
+        expires_at=now + timedelta(days=settings.invite_ttl_days),
+        created_by_user_id=actor.id,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(invite)
+    db.flush()
+    write_audit_log(
+        db,
+        action="invite.create",
+        entity_type="registration_invite",
+        entity_id=invite.id,
+        actor=actor,
+        after={"email": invite.email, "university_id": invite.university_id},
+        request=request,
+    )
+    db.commit()
+    data = _invite_out(db, invite).model_dump()
+    data.update({"token": token, "url": invite_service.invite_url(token)})
+    return InviteCreatedOut(**data)
+
+
+@router.post("/invites/{invite_id}/revoke", response_model=InviteOut)
+def revoke_invite(
+    invite_id: str, request: Request, db: DB_Dependency, actor: User = Depends(require_admin)
+) -> InviteOut:
+    invite = _get_or_404(db, RegistrationInvite, invite_id, "Invite")
+    if invite.used_at is not None:
+        raise AppError(409, "conflict", "A used invite cannot be revoked")
+    if invite.revoked_at is None:
+        invite.revoked_at = utcnow()
+        invite.updated_at = utcnow()
+        write_audit_log(
+            db,
+            action="invite.revoke",
+            entity_type="registration_invite",
+            entity_id=invite.id,
+            actor=actor,
+            before={"status": "pending"},
+            after={"status": "revoked"},
+            request=request,
+        )
+        db.commit()
+    return _invite_out(db, invite)
 
 
 _BULK_IMPORT_COLUMNS = [

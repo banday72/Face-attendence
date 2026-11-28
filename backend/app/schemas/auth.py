@@ -66,3 +66,48 @@ class MeOut(UserOut):
 
 class AuthOut(AccessTokenOut):
     user: MeOut
+
+
+InviteStatus = Literal["pending", "used", "revoked", "expired"]
+
+
+class InviteDetailsOut(StrictModel):
+    full_name: str
+    email: EmailStr
+    university_id: str
+    program: str | None
+    year_level: int | None
+    department_id: str | None
+    department_name: str | None
+    expires_at: datetime
+
+
+class InviteOut(ORMModel):
+    id: str
+    full_name: str
+    email: EmailStr
+    university_id: str
+    department_id: str | None
+    department_name: str | None
+    program: str | None
+    year_level: int | None
+    status: InviteStatus
+    expires_at: datetime
+    created_at: datetime
+    used_at: datetime | None
+    revoked_at: datetime | None
+
+
+class InviteCreatedOut(InviteOut):
+    token: str
+    url: str
+
+
+class InviteRegisterIn(StrictModel):
+    token: str = Field(min_length=20, max_length=128)
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: str) -> str:
+        return validate_password(value)

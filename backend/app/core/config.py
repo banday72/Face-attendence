@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import cached_property, lru_cache
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_JWT_SECRET = "dev-only-jwt-secret-change-this-before-production"
@@ -26,6 +27,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+    public_app_url: str = Field(
+        default_factory=lambda: (
+            f"https://{os.environ['VERCEL_URL']}"
+            if os.environ.get("VERCEL_URL")
+            else "http://localhost:3000"
+        )
+    )
+    invite_ttl_days: int = 7
 
     face_encryption_key: str = DEFAULT_FACE_ENCRYPTION_KEY
     face_match_threshold: float = 0.82
@@ -51,6 +60,7 @@ class Settings(BaseSettings):
     @field_validator(
         "access_token_expire_minutes",
         "refresh_token_expire_days",
+        "invite_ttl_days",
         "face_liveness_min_frames",
         "face_retention_days",
         "default_qr_validity_seconds",
@@ -62,6 +72,14 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("must be greater than zero")
         return value
+
+    @field_validator("public_app_url")
+    @classmethod
+    def valid_public_app_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("PUBLIC_APP_URL must be an absolute http(s) URL")
+        return value.rstrip("/")
 
     @field_validator("default_qr_validity_seconds")
     @classmethod
@@ -127,6 +145,13 @@ class Settings(BaseSettings):
         if "*" in self.cors_origins_list:
             return ["*"]
         hosts = {"localhost", "127.0.0.1"}
+        vercel_url = os.environ.get("VERCEL_URL")
+        if vercel_url:
+            hostname = urlparse(
+                vercel_url if "://" in vercel_url else f"https://{vercel_url}"
+            ).hostname
+            if hostname:
+                hosts.add(hostname)
         if self.environment == "test":
             hosts.add("testserver")
         for origin in self.cors_origins_list:

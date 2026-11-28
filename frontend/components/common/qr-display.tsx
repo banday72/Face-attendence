@@ -19,7 +19,7 @@ export function QrDisplay({ payload, size = 220 }: { payload?: string; size?: nu
     setFailed(false);
     if (!payload) return;
 
-    if (/^(data:image|https?:\/\/)/i.test(payload)) {
+    if (/^data:image\//i.test(payload)) {
       setImage(payload);
       return;
     }

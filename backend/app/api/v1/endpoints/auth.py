@@ -15,7 +15,12 @@ from app.core.deps import (
     refresh_cookie_max_age,
 )
 from app.core.errors import AppError
-from app.core.rate_limit import login_limit, refresh_limit, register_limit
+from app.core.rate_limit import (
+    invite_lookup_limit,
+    login_limit,
+    refresh_limit,
+    register_limit,
+)
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
@@ -24,16 +29,26 @@ from app.core.security import (
     refresh_token_expiry,
     verify_password,
 )
-from app.models import Professor, RefreshToken, Student, User
+from app.models import (
+    Department,
+    Professor,
+    RefreshToken,
+    RegistrationInvite,
+    Student,
+    User,
+)
 from app.schemas.auth import (
     AccessTokenOut,
     AuthOut,
+    InviteDetailsOut,
+    InviteRegisterIn,
     LoginIn,
     MeOut,
     RegisterIn,
     Role,
     UserOut,
 )
+from app.services import invite_service
 from app.utils.uuid import new_uuid, utcnow
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -161,6 +176,100 @@ def register(payload: RegisterIn, request: Request, response: Response, db: DB_D
         raise AppError(409, "conflict", "Account or university ID already exists") from exc
     db.refresh(user)
     return user
+
+
+@router.get("/invites/{token}", response_model=InviteDetailsOut)
+@invite_lookup_limit
+def get_invite(token: str, request: Request, db: DB_Dependency) -> InviteDetailsOut:
+    invite = invite_service.get_pending_invite(db, token)
+    department = db.get(Department, invite.department_id) if invite.department_id else None
+    return InviteDetailsOut(
+        full_name=invite.full_name,
+        email=invite.email,
+        university_id=invite.university_id,
+        program=invite.program,
+        year_level=invite.year_level,
+        department_id=invite.department_id,
+        department_name=department.name if department else None,
+        expires_at=invite.expires_at,
+    )
+
+
+@router.post("/register-with-invite", response_model=AuthOut)
+@register_limit
+def register_with_invite(
+    payload: InviteRegisterIn, request: Request, response: Response, db: DB_Dependency
+) -> AuthOut:
+    invite = invite_service.get_pending_invite(db, payload.token)
+    email = invite.email.lower()
+    if db.scalar(select(User).where(User.email == email)) is not None:
+        raise AppError(409, "conflict", "An account with this email already exists")
+    if db.scalar(select(Student).where(Student.university_id == invite.university_id)) is not None:
+        raise AppError(409, "conflict", "University ID is already registered")
+
+    now = utcnow()
+    claimed = db.execute(
+        update(RegistrationInvite)
+        .where(
+            RegistrationInvite.id == invite.id,
+            RegistrationInvite.used_at.is_(None),
+            RegistrationInvite.revoked_at.is_(None),
+            RegistrationInvite.expires_at > now,
+        )
+        .values(used_at=now)
+    )
+    if int(getattr(claimed, "rowcount", 0) or 0) != 1:
+        db.rollback()
+        raise AppError(409, "conflict", "This invite link is no longer available")
+
+    user = User(
+        id=new_uuid(),
+        email=email,
+        hashed_password=hash_password(payload.password),
+        full_name=invite.full_name,
+        role="student",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(user)
+    db.flush()
+    db.add(
+        Student(
+            id=new_uuid(),
+            user_id=user.id,
+            university_id=invite.university_id,
+            department_id=invite.department_id,
+            program=invite.program,
+            year_level=invite.year_level,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.flush()
+    refresh = _issue_refresh_token(db, user)
+    auth = _auth_out(db, user)
+    write_audit_log(
+        db,
+        action="auth.register_with_invite",
+        entity_type="user",
+        entity_id=user.id,
+        actor=user,
+        after={
+            "email": user.email,
+            "role": user.role,
+            "university_id": invite.university_id,
+            "invite_id": invite.id,
+        },
+        reason="Student invite registration",
+        request=request,
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise AppError(409, "conflict", "Account or university ID already exists") from exc
+    _set_refresh_cookie(response, refresh)
+    return auth
 
 
 @router.post("/login", response_model=AuthOut)

@@ -21,6 +21,7 @@ limiter = Limiter(
 login_limit = limiter.limit("5/minute", methods=["POST"])
 refresh_limit = limiter.limit("10/minute", methods=["POST"])
 register_limit = limiter.limit("5/minute", methods=["POST"])
+invite_lookup_limit = limiter.limit("10/minute")
 face_register_limit = limiter.limit("5/minute", methods=["POST"])
 face_attendance_limit = limiter.limit("10/minute", methods=["POST"])
 qr_checkin_limit = limiter.limit("30/minute", methods=["POST"])
