@@ -4,7 +4,6 @@ import asyncio
 import base64
 import json
 import logging
-import os
 import sys
 import time
 import traceback
@@ -309,6 +308,7 @@ if _startup_error is not None:
 
         app = _err_app
     except Exception:
+        logger.exception("Unable to build startup error app")
         async def _startup_error_app(scope, receive, send):
             if scope["type"] == "lifespan":
                 while True:
@@ -335,4 +335,3 @@ if _startup_error is not None:
         app = _startup_error_app
 
 handler = app
-app = app
