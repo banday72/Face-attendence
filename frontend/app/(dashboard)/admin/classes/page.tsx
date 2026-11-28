@@ -12,6 +12,7 @@ import { TableSkeleton } from "@/components/common/table-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
@@ -104,7 +105,8 @@ export default function ClassesPage() {
   const [deleting, setDeleting] = useState<ClassItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [enrollmentClass, setEnrollmentClass] = useState<ClassItem | null>(null);
-  const [studentId, setStudentId] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
   const [enrolling, setEnrolling] = useState(false);
   const [unenrolling, setUnenrolling] = useState<RosterEntry | null>(null);
 
@@ -152,6 +154,49 @@ export default function ClassesPage() {
     [enrollmentClass?.id],
   );
   const roster = useResource(rosterLoader, Boolean(enrollmentClass));
+
+  const enrolledStudentIds = new Set(
+    (roster.data?.items ?? [])
+      .map((record) => record.student_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const availableStudents = (studentOptions.data ?? []).filter(
+    (student) => !enrolledStudentIds.has(student.id),
+  );
+  const query = studentSearch.trim().toLowerCase();
+  const filteredStudents = availableStudents.filter(
+    (student) =>
+      !query ||
+      student.full_name.toLowerCase().includes(query) ||
+      (student.university_id ?? "").toLowerCase().includes(query) ||
+      student.email.toLowerCase().includes(query),
+  );
+  const allFilteredSelected =
+    filteredStudents.length > 0 && filteredStudents.every((student) => selectedStudentIds.includes(student.id));
+
+  const openEnrollment = (item: ClassItem) => {
+    setEnrollmentClass(item);
+    setSelectedStudentIds([]);
+    setStudentSearch("");
+  };
+
+  const toggleStudent = (studentId: string) => {
+    setSelectedStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId],
+    );
+  };
+
+  const toggleAllFiltered = () => {
+    const ids = filteredStudents.map((student) => student.id);
+    setSelectedStudentIds((current) => {
+      if (ids.every((id) => current.includes(id))) {
+        return [];
+      }
+      return [...new Set([...current, ...ids])];
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -238,19 +283,30 @@ export default function ClassesPage() {
   };
 
   const handleEnroll = async () => {
-    if (!enrollmentClass || !studentId) {
-      toast.error("Select a student first.");
+    if (!enrollmentClass || selectedStudentIds.length === 0) {
+      toast.error("Select at least one student.");
       return;
     }
     setEnrolling(true);
     try {
-      await api.post(`/admin/classes/${enrollmentClass.id}/enrollments`, { student_id: studentId });
-      toast.success("Student enrolled");
-      setStudentId("");
-      roster.reload();
-      resource.reload();
-    } catch (error) {
-      toast.error(errorMessage(error));
+      const results = await Promise.allSettled(
+        selectedStudentIds.map((student_id) =>
+          api.post(`/admin/classes/${enrollmentClass.id}/enrollments`, { student_id }),
+        ),
+      );
+      const succeeded = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+      if (succeeded > 0) {
+        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} enrolled`);
+        setSelectedStudentIds([]);
+        roster.reload();
+        resource.reload();
+      }
+      if (failed > 0) {
+        const firstFailure = results.find((result) => result.status === "rejected");
+        const detail = firstFailure?.status === "rejected" ? `: ${errorMessage(firstFailure.reason)}` : "";
+        toast.error(`${failed} enrollment${failed === 1 ? "" : "s"} failed${detail}`);
+      }
     } finally {
       setEnrolling(false);
     }
@@ -399,7 +455,7 @@ export default function ClassesPage() {
                             extra={
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onSelect={() => setEnrollmentClass(item)}>
+                                <DropdownMenuItem onSelect={() => openEnrollment(item)}>
                                   <Users /> Manage students
                                 </DropdownMenuItem>
                               </>
@@ -570,25 +626,71 @@ export default function ClassesPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Students · {enrollmentClass?.name}</DialogTitle>
-            <DialogDescription>Enroll or remove students from this class.</DialogDescription>
+            <DialogDescription>
+              Select one or more students to enroll, or remove students from the roster below.
+            </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Select value={studentId || "none"} onValueChange={(value) => setStudentId(value === "none" ? "" : value)}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select a student" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Select a student</SelectItem>
-                {(studentOptions.data ?? []).map((student: StudentOption) => (
-                  <SelectItem key={student.id} value={student.id}>
-                    {student.full_name} · {student.university_id || student.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleEnroll} loading={enrolling} disabled={!studentId}>
-              <Plus /> Enroll
-            </Button>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                  placeholder="Search students…"
+                  className="pl-9"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={toggleAllFiltered}
+                disabled={filteredStudents.length === 0}
+              >
+                {allFilteredSelected ? "Clear selection" : "Select all"}
+              </Button>
+            </div>
+            <div className="max-h-52 overflow-y-auto rounded-md border border-border">
+              {studentOptions.loading ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">Loading students…</div>
+              ) : studentOptions.error ? (
+                <div className="p-6 text-center text-sm text-destructive">
+                  {errorMessage(studentOptions.error)}
+                </div>
+              ) : filteredStudents.length === 0 ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  {query ? "No students match your search." : "No students available to enroll."}
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filteredStudents.map((student: StudentOption) => (
+                    <label
+                      key={student.id}
+                      className="flex cursor-pointer items-center gap-3 p-3 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <Checkbox
+                        checked={selectedStudentIds.includes(student.id)}
+                        onCheckedChange={() => toggleStudent(student.id)}
+                        aria-label={`Select ${student.full_name}`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{student.full_name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {student.university_id || student.email}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                {selectedStudentIds.length} student{selectedStudentIds.length === 1 ? "" : "s"} selected
+              </p>
+              <Button onClick={handleEnroll} loading={enrolling} disabled={selectedStudentIds.length === 0}>
+                <Plus /> Enroll selected
+              </Button>
+            </div>
           </div>
           <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border">
             {roster.loading ? (
