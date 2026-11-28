@@ -35,8 +35,11 @@ def test_semester_crud_and_class_integration(client: TestClient, db_session: Ses
 
     listed = client.get("/api/v1/admin/semesters", headers=headers, params={"is_active": True})
     assert listed.status_code == 200, listed.text
-    assert listed.json()["total"] == 1
-    assert listed.json()["items"][0]["id"] == semester["id"]
+    assert listed.json()["total"] == 2
+    assert {item["id"] for item in listed.json()["items"]} == {
+        semester["id"],
+        data["semester"].id,
+    }
 
     options = client.get("/api/v1/semesters", headers=headers, params={"search": "2027"})
     assert options.status_code == 200, options.text
@@ -75,6 +78,51 @@ def test_semester_crud_and_class_integration(client: TestClient, db_session: Ses
     assert patched.status_code == 200, patched.text
     assert patched.json()["name"] == "Spring Term 2027"
     assert patched.json()["is_active"] is False
+
+
+def test_multiple_semesters_can_be_active(client: TestClient, db_session: Session) -> None:
+    data = create_academic_data(db_session)
+    headers = _admin_headers(client, db_session)
+
+    first = client.post(
+        "/api/v1/admin/semesters",
+        headers=headers,
+        json={
+            "name": "Summer 2027",
+            "code": "SU2027",
+            "academic_year": "2027",
+            "is_active": True,
+        },
+    )
+    assert first.status_code == 201, first.text
+    second = client.post(
+        "/api/v1/admin/semesters",
+        headers=headers,
+        json={
+            "name": "Winter 2027",
+            "code": "W2027",
+            "academic_year": "2027",
+            "is_active": True,
+        },
+    )
+    assert second.status_code == 201, second.text
+
+    patched = client.patch(
+        f"/api/v1/admin/semesters/{second.json()['id']}",
+        headers=headers,
+        json={"is_active": True},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["is_active"] is True
+
+    listed = client.get("/api/v1/admin/semesters", headers=headers, params={"is_active": True})
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["total"] == 3
+    assert {item["id"] for item in listed.json()["items"]} == {
+        data["semester"].id,
+        first.json()["id"],
+        second.json()["id"],
+    }
 
 
 def test_faculty_listing_and_class_assignments(client: TestClient, db_session: Session) -> None:

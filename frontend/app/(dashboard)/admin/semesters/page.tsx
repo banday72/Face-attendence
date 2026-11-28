@@ -330,7 +330,7 @@ export default function SemestersPage() {
         <DialogContent className="max-h-[92vh] sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit semester" : "New semester"}</DialogTitle>
-            <DialogDescription>Only one semester can be active at a time.</DialogDescription>
+            <DialogDescription>Add as many semesters as you need. Multiple semesters can be active.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-3" noValidate>
             <FormField label="Name" htmlFor="semester-name" required error={fieldErrors.name}>
@@ -388,7 +388,7 @@ export default function SemestersPage() {
             <div className="flex items-center justify-between rounded-md border border-border p-3 sm:col-span-3">
               <div>
                 <p className="text-sm font-medium">Active semester</p>
-                <p className="text-xs text-muted-foreground">Activating this semester deactivates all others.</p>
+                <p className="text-xs text-muted-foreground">Active semesters can be used by classes and reports together.</p>
               </div>
               <Switch checked={form.is_active} onCheckedChange={(checked) => setField("is_active", checked)} aria-label="Active semester" />
             </div>

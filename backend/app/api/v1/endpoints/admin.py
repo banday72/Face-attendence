@@ -543,10 +543,6 @@ def create_semester(
 ) -> SemesterOut:
     _check_unique(db, Semester, Semester.name, payload.name, "Semester name")
     _check_unique(db, Semester, Semester.code, payload.code, "Semester code")
-    if payload.is_active:
-        db.query(Semester).filter(Semester.is_active.is_(True)).update(
-            {"is_active": False, "updated_at": utcnow()}, synchronize_session=False
-        )
     semester = Semester(
         id=new_uuid(),
         name=payload.name,
@@ -593,10 +589,6 @@ def update_semester(
         _check_unique(db, Semester, Semester.name, updates["name"], "Semester name", semester_id)
     if updates.get("code"):
         _check_unique(db, Semester, Semester.code, updates["code"], "Semester code", semester_id)
-    if updates.get("is_active"):
-        db.query(Semester).filter(
-            Semester.id != semester_id, Semester.is_active.is_(True)
-        ).update({"is_active": False, "updated_at": utcnow()}, synchronize_session=False)
     before = {key: getattr(semester, key, None) for key in updates}
     for key, value in updates.items():
         setattr(semester, key, value)
