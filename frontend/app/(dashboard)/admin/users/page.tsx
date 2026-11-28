@@ -47,8 +47,14 @@ import {
 } from "@/components/ui/table";
 import { ApiError, api, errorMessage } from "@/lib/api";
 import { useDebouncedValue, useResource } from "@/lib/hooks";
-import { normalizeDepartment, normalizePaginated, normalizeUser } from "@/lib/normalize";
-import type { Department, Role, User } from "@/lib/types";
+import {
+  normalizeClass,
+  normalizeDepartment,
+  normalizePaginated,
+  normalizeSemester,
+  normalizeUser,
+} from "@/lib/normalize";
+import type { ClassItem, Department, Role, Semester, User } from "@/lib/types";
 import { initials } from "@/lib/utils";
 
 type RegistrationRole = "student" | "professor";
@@ -60,6 +66,8 @@ interface UserForm {
   university_id: string;
   employee_id: string;
   role: Role;
+  semester_id: string;
+  class_id: string;
   department_id: string;
   password: string;
   is_active: boolean;
@@ -77,6 +85,8 @@ function emptyForm(role: Role = "student"): UserForm {
     university_id: "",
     employee_id: "",
     role,
+    semester_id: "",
+    class_id: "",
     department_id: "",
     password: "",
     is_active: true,
@@ -97,6 +107,7 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "">("");
+  const [semesterFilter, setSemesterFilter] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
@@ -133,9 +144,10 @@ export default function UsersPage() {
           page_size: 20,
           search: debouncedSearch || undefined,
           role: roleFilter || undefined,
+          semester_id: semesterFilter || undefined,
         },
       }),
-    [debouncedSearch, page, roleFilter],
+    [debouncedSearch, page, roleFilter, semesterFilter],
   );
   const resource = useResource(loader);
   const departmentsLoader = useCallback(
@@ -143,6 +155,22 @@ export default function UsersPage() {
     [],
   );
   const departments = useResource<Department[]>(departmentsLoader);
+  const semestersLoader = useCallback(
+    () =>
+      api.getPaginated<Semester>("/admin/semesters", normalizeSemester, {
+        query: { page_size: 100 },
+      }).then((payload) => payload.items),
+    [],
+  );
+  const semesters = useResource<Semester[]>(semestersLoader);
+  const classesLoader = useCallback(
+    () =>
+      api.getPaginated<ClassItem>("/admin/classes", normalizeClass, {
+        query: { semester_id: form.semester_id || undefined, page_size: 100 },
+      }).then((payload) => payload.items),
+    [form.semester_id],
+  );
+  const classes = useResource<ClassItem[]>(classesLoader, dialogOpen && form.role === "student");
 
   const openCreate = (role: Role = "student") => {
     setEditing(null);
@@ -161,6 +189,8 @@ export default function UsersPage() {
       university_id: user.university_id ?? "",
       employee_id: user.employee_id ?? "",
       role: user.role,
+      semester_id: "",
+      class_id: "",
       department_id: user.department_id ?? "",
       password: "",
       is_active: user.is_active,
@@ -218,6 +248,7 @@ export default function UsersPage() {
         if (form.university_id.trim()) payload.university_id = form.university_id.trim();
         if (form.program.trim()) payload.program = form.program.trim();
         if (form.year_level) payload.year_level = Number(form.year_level);
+        if (!editing && form.class_id) payload.class_id = form.class_id;
       }
       if (form.role === "professor") {
         if (form.employee_id.trim()) payload.employee_id = form.employee_id.trim();
@@ -349,6 +380,25 @@ export default function UsersPage() {
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="professor">Professor</SelectItem>
                 <SelectItem value="student">Student</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={semesterFilter || "all"}
+              onValueChange={(value) => {
+                setSemesterFilter(value === "all" ? "" : value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="sm:w-52">
+                <SelectValue placeholder="All semesters" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All semesters</SelectItem>
+                {(semesters.data ?? []).map((semester) => (
+                  <SelectItem key={semester.id} value={semester.id}>
+                    {semester.name} ({semester.academic_year})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -527,6 +577,57 @@ export default function UsersPage() {
                     onChange={(event) => setForm((current) => ({ ...current, year_level: event.target.value }))}
                   />
                 </FormField>
+                {!editing && (
+                  <>
+                    <FormField label="Semester" htmlFor="user-semester">
+                      <Select
+                        value={form.semester_id || "all"}
+                        onValueChange={(value) =>
+                          setForm((current) => ({
+                            ...current,
+                            semester_id: value === "all" ? "" : value,
+                            class_id: "",
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="user-semester">
+                          <SelectValue placeholder="No semester" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">No semester</SelectItem>
+                          {(semesters.data ?? []).map((semester) => (
+                            <SelectItem key={semester.id} value={semester.id}>
+                              {semester.name} ({semester.academic_year})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    <FormField label="Class" htmlFor="user-class">
+                      <Select
+                        value={form.class_id || "none"}
+                        disabled={!form.semester_id}
+                        onValueChange={(value) =>
+                          setForm((current) => ({ ...current, class_id: value === "none" ? "" : value }))
+                        }
+                      >
+                        <SelectTrigger id="user-class">
+                          <SelectValue
+                            placeholder={form.semester_id ? "No class" : "Select a semester first"}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No class</SelectItem>
+                          {(classes.data ?? []).map((classItem) => (
+                            <SelectItem key={classItem.id} value={classItem.id}>
+                              {classItem.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                  </>
+                )}
               </>
             ) : (
               <>

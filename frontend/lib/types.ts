@@ -110,6 +110,7 @@ export interface Semester {
   exam_end?: string;
   is_active: boolean;
   class_count?: number;
+  student_count?: number;
   is_current?: boolean;
   created_at?: string;
 }

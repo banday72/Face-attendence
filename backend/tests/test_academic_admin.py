@@ -196,3 +196,71 @@ def test_class_creation_rejects_missing_term_and_semester(client: TestClient, db
         json={"course_id": data["course"].id, "section": "C"},
     )
     assert invalid.status_code == 422
+
+
+def test_student_creation_can_enroll_in_selected_class_and_filter_by_semester(
+    client: TestClient, db_session: Session
+) -> None:
+    data = create_academic_data(db_session)
+    headers = _admin_headers(client, db_session)
+
+    new_class = client.post(
+        "/api/v1/admin/classes",
+        headers=headers,
+        json={
+            "course_id": data["course"].id,
+            "semester_id": data["semester"].id,
+            "section": "B",
+            "capacity": 10,
+        },
+    )
+    assert new_class.status_code == 201, new_class.text
+    class_id = new_class.json()["id"]
+
+    before = client.get("/api/v1/admin/semesters", headers=headers, params={"page_size": 100})
+    assert before.status_code == 200, before.text
+    before_semester = next(item for item in before.json()["items"] if item["id"] == data["semester"].id)
+    assert before_semester["student_count"] == 1
+
+    created = client.post(
+        "/api/v1/admin/users",
+        headers=headers,
+        json={
+            "email": "added.student@university.edu",
+            "password": "Student123!",
+            "full_name": "Added Student",
+            "role": "student",
+            "university_id": "STU-200",
+            "class_id": class_id,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    users_by_semester = client.get(
+        "/api/v1/admin/users",
+        headers=headers,
+        params={"role": "student", "semester_id": data["semester"].id},
+    )
+    assert users_by_semester.status_code == 200, users_by_semester.text
+    assert users_by_semester.json()["total"] == 2
+
+    users_by_class = client.get(
+        "/api/v1/admin/users", headers=headers, params={"role": "student", "class_id": class_id}
+    )
+    assert users_by_class.status_code == 200, users_by_class.text
+    assert users_by_class.json()["total"] == 1
+    assert users_by_class.json()["items"][0]["email"] == "added.student@university.edu"
+
+    students_by_class = client.get(
+        "/api/v1/admin/students",
+        headers=headers,
+        params={"semester_id": data["semester"].id, "class_id": class_id},
+    )
+    assert students_by_class.status_code == 200, students_by_class.text
+    assert students_by_class.json()["total"] == 1
+    assert students_by_class.json()["items"][0]["university_id"] == "STU-200"
+
+    after = client.get("/api/v1/admin/semesters", headers=headers, params={"page_size": 100})
+    assert after.status_code == 200, after.text
+    after_semester = next(item for item in after.json()["items"] if item["id"] == data["semester"].id)
+    assert after_semester["student_count"] == 2

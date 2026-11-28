@@ -220,6 +220,14 @@ def _semester_out(db: Session, semester: Semester) -> SemesterOut:
     class_count = int(
         db.scalar(select(func.count()).select_from(Class_).where(Class_.semester_id == semester.id)) or 0
     )
+    student_count = int(
+        db.scalar(
+            select(func.count(func.distinct(Enrollment.student_id)))
+            .join(Class_, Class_.id == Enrollment.class_id)
+            .where(Class_.semester_id == semester.id)
+        )
+        or 0
+    )
     current_id = db.scalar(
         select(Semester.id)
         .where(Semester.is_active.is_(True))
@@ -235,6 +243,7 @@ def _semester_out(db: Session, semester: Semester) -> SemesterOut:
         end_date=semester.end_date,
         is_active=semester.is_active,
         class_count=class_count,
+        student_count=student_count,
         is_current=current_id == semester.id,
         created_at=semester.created_at,
     )
@@ -638,6 +647,8 @@ def list_users(
     page_size: int = Query(20, ge=1, le=100),
     role: Literal["admin", "professor", "student"] | None = None,
     is_active: bool | None = None,
+    semester_id: str | None = None,
+    class_id: str | None = None,
     search: str | None = Query(None, max_length=100),
     sort_by: Literal["email", "full_name", "role", "created_at"] = "created_at",
     sort_order: Literal["asc", "desc"] = "desc",
@@ -648,6 +659,17 @@ def list_users(
         query = query.where(User.role == role)
     if is_active is not None:
         query = query.where(User.is_active == is_active)
+    if semester_id or class_id:
+        enrollment_query = select(Student.user_id).join(
+            Enrollment, Enrollment.student_id == Student.id
+        )
+        if class_id:
+            enrollment_query = enrollment_query.where(Enrollment.class_id == class_id)
+        if semester_id:
+            enrollment_query = enrollment_query.join(
+                Class_, Class_.id == Enrollment.class_id
+            ).where(Class_.semester_id == semester_id)
+        query = query.where(User.id.in_(enrollment_query))
     if search:
         pattern = f"%{search}%"
         query = query.where(or_(User.email.ilike(pattern), User.full_name.ilike(pattern)))
@@ -673,6 +695,11 @@ def _create_user_record(
         _check_unique(db, Professor, Professor.employee_id, payload.employee_id, "Employee ID")
     if payload.department_id:
         _get_or_404(db, Department, payload.department_id, "Department")
+    class_ = None
+    if payload.class_id:
+        if payload.role != "student":
+            raise AppError(400, "bad_request", "class_id is only valid for students")
+        class_ = _get_or_404(db, Class_, payload.class_id, "Class")
 
     user = User(
         id=new_uuid(),
@@ -686,19 +713,19 @@ def _create_user_record(
     )
     db.add(user)
     db.flush()
+    student = None
     if payload.role == "student":
-        db.add(
-            Student(
-                id=new_uuid(),
-                user_id=user.id,
-                university_id=payload.university_id,
-                department_id=payload.department_id,
-                program=payload.program,
-                year_level=payload.year_level,
-                created_at=utcnow(),
-                updated_at=utcnow(),
-            )
+        student = Student(
+            id=new_uuid(),
+            user_id=user.id,
+            university_id=payload.university_id,
+            department_id=payload.department_id,
+            program=payload.program,
+            year_level=payload.year_level,
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
+        db.add(student)
     elif payload.role == "professor":
         db.add(
             Professor(
@@ -713,6 +740,27 @@ def _create_user_record(
             )
         )
     db.flush()
+    if student is not None and class_ is not None:
+        enrollment = Enrollment(
+            id=new_uuid(),
+            class_id=class_.id,
+            student_id=student.id,
+            status="enrolled",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        db.add(enrollment)
+        db.flush()
+        write_audit_log(
+            db,
+            action="enrollment.create",
+            entity_type="enrollment",
+            entity_id=enrollment.id,
+            actor=actor,
+            after={"class_id": class_.id, "student_id": student.id},
+            reason="Student creation with class enrollment",
+            request=request,
+        )
     write_audit_log(
         db,
         action="user.create",
@@ -1287,12 +1335,23 @@ def list_students(
     db: DB_Dependency,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    semester_id: str | None = None,
+    class_id: str | None = None,
     search: str | None = Query(None, max_length=100),
     sort_by: Literal["full_name", "email", "university_id", "created_at"] = "full_name",
     sort_order: Literal["asc", "desc"] = "asc",
 ) -> Page[StudentOptionOut]:
     params = pagination(page, page_size, sort_by, sort_order)
     query = select(Student).join(User, User.id == Student.user_id)
+    if semester_id or class_id:
+        enrollment_query = select(Enrollment.student_id)
+        if class_id:
+            enrollment_query = enrollment_query.where(Enrollment.class_id == class_id)
+        if semester_id:
+            enrollment_query = enrollment_query.join(
+                Class_, Class_.id == Enrollment.class_id
+            ).where(Class_.semester_id == semester_id)
+        query = query.where(Student.id.in_(enrollment_query))
     if search:
         pattern = f"%{search}%"
         query = query.where(

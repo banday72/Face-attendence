@@ -252,7 +252,7 @@ export default function SemestersPage() {
           error={resource.error}
           data={resource.data}
           onRetry={resource.reload}
-          skeleton={<TableSkeleton columns={7} />}
+          skeleton={<TableSkeleton columns={8} />}
           emptyTitle="No semesters yet"
           emptyDescription="Create a semester before adding class sections."
         >
@@ -269,6 +269,7 @@ export default function SemestersPage() {
                       <TableHead>Academic year</TableHead>
                       <TableHead>Dates</TableHead>
                       <TableHead>Classes</TableHead>
+                      <TableHead>Students</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-12" />
                     </TableRow>
@@ -297,6 +298,7 @@ export default function SemestersPage() {
                             : "—"}
                         </TableCell>
                         <TableCell>{semester.class_count ?? 0}</TableCell>
+                        <TableCell>{semester.student_count ?? 0}</TableCell>
                         <TableCell>
                           <Badge variant={semester.is_current ? "info" : semester.is_active ? "default" : "secondary"}>
                             {semester.is_current ? "Current" : semester.is_active ? "Active" : "Inactive"}

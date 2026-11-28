@@ -119,6 +119,7 @@ class SemesterOut(ORMModel):
     exam_end: date | None = None
     is_active: bool
     class_count: int = 0
+    student_count: int = 0
     is_current: bool = False
     created_at: datetime
 
@@ -140,6 +141,7 @@ class UserCreate(StrictModel):
     phone: str | None = Field(default=None, max_length=30)
     university_id: str | None = Field(default=None, max_length=50)
     employee_id: str | None = Field(default=None, max_length=50)
+    class_id: str | None = None
     department_id: str | None = None
     program: str | None = Field(default=None, max_length=120)
     year_level: int | None = Field(default=None, ge=1, le=8)
