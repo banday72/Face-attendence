@@ -508,6 +508,16 @@ export interface RegisterPayload {
   year_level?: number | null;
 }
 
+export interface ProfessorRegisterPayload {
+  full_name: string;
+  email: string;
+  employee_id: string;
+  password: string;
+  department_id?: string | null;
+  title?: string | null;
+  office?: string | null;
+}
+
 export interface DepartmentOption {
   id: string;
   name: string;

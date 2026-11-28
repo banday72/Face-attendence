@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import DEFAULT_FACE_ENCRYPTION_KEY, DEFAULT_JWT_SECRET, Settings
 from app.core.security import hash_token
-from app.models import Department, RefreshToken, Student, User
+from app.models import Department, Professor, RefreshToken, Student, User
 from app.utils.uuid import new_uuid, utcnow
 from tests.conftest import (
     create_user,
@@ -255,3 +255,59 @@ def test_shared_registration_link_creates_independent_students(client, db_sessio
     assert len(students) == 2
     assert {student.user_id for student in students} == {user.id for user in users}
     assert all(student.department_id == department.id for student in students)
+
+
+def test_shared_professor_registration_link_creates_independent_professors(client, db_session) -> None:
+    department = Department(
+        id=new_uuid(),
+        name="Mathematics",
+        code="MATH",
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db_session.add(department)
+    db_session.commit()
+
+    emails = ["professor.one@university.edu", "professor.two@university.edu"]
+    employee_ids = ["EMP-SHARED-1", "EMP-SHARED-2"]
+    for email, employee_id in zip(emails, employee_ids):
+        response = client.post(
+            "/api/v1/auth/register-professor",
+            json={
+                "email": email,
+                "password": "Professor123!",
+                "full_name": email.split("@")[0].replace(".", " ").title(),
+                "employee_id": employee_id,
+                "department_id": department.id,
+                "title": "Assistant Professor",
+                "office": "Block A, Room 204",
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["role"] == "professor"
+
+    users = db_session.scalars(select(User).where(User.email.in_(emails))).all()
+    professors = db_session.scalars(select(Professor).where(Professor.employee_id.in_(employee_ids))).all()
+    assert len(users) == 2
+    assert len(professors) == 2
+    assert {professor.user_id for professor in professors} == {user.id for user in users}
+    assert all(professor.department_id == department.id for professor in professors)
+    assert all(professor.title == "Assistant Professor" for professor in professors)
+
+    duplicate = client.post(
+        "/api/v1/auth/register-professor",
+        json={
+            "email": "professor.three@university.edu",
+            "password": "Professor123!",
+            "full_name": "Professor Three",
+            "employee_id": employee_ids[0],
+        },
+    )
+    assert duplicate.status_code == 409
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": emails[0], "password": "Professor123!"},
+    )
+    assert login.status_code == 200
+    assert login.json()["user"]["role"] == "professor"

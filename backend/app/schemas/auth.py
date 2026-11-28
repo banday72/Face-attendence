@@ -35,6 +35,21 @@ class RegisterIn(StrictModel):
         return validate_password(value)
 
 
+class ProfessorRegisterIn(StrictModel):
+    email: EmailStr
+    password: str
+    full_name: str = Field(min_length=2, max_length=150)
+    employee_id: str = Field(min_length=3, max_length=50)
+    department_id: str | None = None
+    title: str | None = Field(default=None, max_length=50)
+    office: str | None = Field(default=None, max_length=80)
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: str) -> str:
+        return validate_password(value)
+
+
 class LoginIn(StrictModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=72)

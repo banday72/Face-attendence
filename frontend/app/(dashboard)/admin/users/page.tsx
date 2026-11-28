@@ -51,6 +51,8 @@ import { normalizeDepartment, normalizePaginated, normalizeUser } from "@/lib/no
 import type { Department, Role, User } from "@/lib/types";
 import { initials } from "@/lib/utils";
 
+type RegistrationRole = "student" | "professor";
+
 interface UserForm {
   full_name: string;
   email: string;
@@ -111,6 +113,7 @@ export default function UsersPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [registrationRole, setRegistrationRole] = useState<RegistrationRole>("student");
   const [registrationUrl, setRegistrationUrl] = useState("");
 
   useEffect(() => {
@@ -171,8 +174,11 @@ export default function UsersPage() {
     setDialogOpen(true);
   };
 
-  const openRegistrationLink = () => {
-    setRegistrationUrl(`${window.location.origin}/register`);
+  const openRegistrationLink = (role: RegistrationRole) => {
+    setRegistrationRole(role);
+    setRegistrationUrl(
+      `${window.location.origin}${role === "professor" ? "/register-professor" : "/register"}`,
+    );
     setRegistrationOpen(true);
   };
 
@@ -277,7 +283,7 @@ export default function UsersPage() {
     if (!registrationUrl) return;
     try {
       await navigator.clipboard.writeText(registrationUrl);
-      toast.success("Registration link copied");
+      toast.success(`${registrationRole === "professor" ? "Professor" : "Student"} registration link copied`);
     } catch {
       toast.error("Clipboard unavailable. Copy the link manually.");
     }
@@ -297,8 +303,11 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload /> Bulk import
             </Button>
-            <Button variant="outline" onClick={openRegistrationLink}>
-              <Link2 /> Registration link
+            <Button variant="outline" onClick={() => openRegistrationLink("student")}>
+              <Link2 /> Student link
+            </Button>
+            <Button variant="outline" onClick={() => openRegistrationLink("professor")}>
+              <Link2 /> Professor link
             </Button>
             <Button variant="outline" onClick={() => openCreate("professor")}>
               <Plus /> Add professor
@@ -611,10 +620,13 @@ export default function UsersPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Student registration link</DialogTitle>
+            <DialogTitle>
+              {registrationRole === "professor" ? "Professor registration link" : "Student registration link"}
+            </DialogTitle>
             <DialogDescription>
-              Share this one link with all students. Each student fills their own details, creates
-              their account, and then registers their face. Every submission is stored separately.
+              {registrationRole === "professor"
+                ? "Share this one link with your faculty. Each professor fills their own details and creates their own account."
+                : "Share this one link with all students. Each student fills their own details, creates their account, and then registers their face."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -626,7 +638,9 @@ export default function UsersPage() {
                   {registrationUrl}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Anyone with this link can create a student account, so share it only with your class.
+                  {registrationRole === "professor"
+                    ? "Anyone with this link can create a professor account, so share it only with your faculty."
+                    : "Anyone with this link can create a student account, so share it only with your class."}
                 </p>
                 <Button variant="outline" size="sm" onClick={() => void copyRegistrationLink()}>
                   <Copy /> Copy link

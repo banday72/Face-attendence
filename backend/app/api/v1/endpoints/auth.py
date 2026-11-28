@@ -44,6 +44,7 @@ from app.schemas.auth import (
     InviteRegisterIn,
     LoginIn,
     MeOut,
+    ProfessorRegisterIn,
     PublicDepartmentOut,
     RegisterIn,
     RegistrationOptionsOut,
@@ -193,6 +194,68 @@ def register(payload: RegisterIn, request: Request, response: Response, db: DB_D
     except IntegrityError as exc:
         db.rollback()
         raise AppError(409, "conflict", "Account or university ID already exists") from exc
+    db.refresh(user)
+    return user
+
+
+@router.post("/register-professor", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@register_limit
+def register_professor(
+    payload: ProfessorRegisterIn, request: Request, response: Response, db: DB_Dependency
+) -> User:
+    email = str(payload.email).lower()
+    if db.scalar(select(User).where(User.email == email)):
+        raise AppError(409, "conflict", "An account with this email already exists")
+    if db.scalar(select(Professor).where(Professor.employee_id == payload.employee_id)):
+        raise AppError(409, "conflict", "Employee ID is already registered")
+    department = db.get(Department, payload.department_id) if payload.department_id else None
+    if payload.department_id and department is None:
+        raise AppError(404, "not_found", "Department not found")
+
+    now = utcnow()
+    user = User(
+        id=new_uuid(),
+        email=email,
+        hashed_password=hash_password(payload.password),
+        full_name=payload.full_name,
+        role="professor",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(user)
+    db.flush()
+    professor = Professor(
+        id=new_uuid(),
+        user_id=user.id,
+        employee_id=payload.employee_id,
+        department_id=department.id if department else None,
+        title=payload.title,
+        office=payload.office,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(professor)
+    db.flush()
+    write_audit_log(
+        db,
+        action="auth.register_professor",
+        entity_type="user",
+        entity_id=user.id,
+        actor=user,
+        after={
+            "email": user.email,
+            "role": user.role,
+            "employee_id": professor.employee_id,
+            "department_id": professor.department_id,
+        },
+        reason="Professor self-registration",
+        request=request,
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise AppError(409, "conflict", "Account or employee ID already exists") from exc
     db.refresh(user)
     return user
 
