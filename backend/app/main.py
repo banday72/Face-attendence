@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 _startup_error: str | None = None
-_vercel_app_ready = False
+_migration_error: str | None = None
 app: Any = None
 
 try:
@@ -55,11 +55,6 @@ except Exception:
 
 
 def _vercel_proxy_handler_impl(event: dict[str, Any]) -> dict[str, Any]:
-    global _vercel_app_ready
-    if not _vercel_app_ready:
-        run_database_migrations()
-        verify_database_readiness()
-        _vercel_app_ready = True
     payload = json.loads(event.get("body") or "{}")
     raw_headers = payload.get("headers", {})
     headers: dict[str, str] = {}
@@ -222,11 +217,16 @@ if _startup_error is None:
 
   @asynccontextmanager
   async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+      global _migration_error
       retention_task: asyncio.Task[None] | None = None
       scheduled_export_runner: asyncio.Task[None] | None = None
       if not settings.is_testing:
-          run_database_migrations()
-          verify_database_readiness()
+          try:
+              run_database_migrations()
+              verify_database_readiness()
+          except Exception:
+              _migration_error = traceback.format_exc()
+              logger.exception("Startup migration failed")
           if settings.face_retention_days > 0:
               retention_task = asyncio.create_task(face_retention_task())
           scheduled_export_runner = asyncio.create_task(scheduled_export_task())
