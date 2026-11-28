@@ -3,6 +3,7 @@ export const FACE_FRAME_COUNT = 4;
 export const QR_TOKEN_PREFIX = "uat:v1:";
 export const DEFAULT_PAGE_SIZE = 20;
 export const LIVE_REFRESH_MS = 5000;
+export const sessionQrStorageKey = (sessionId: string) => `face-attendance:live-qr:${sessionId}`;
 
 export const FACE_CHALLENGES = [
   { key: "turn_left", label: "Turn your head slowly to the left" },

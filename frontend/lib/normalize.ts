@@ -593,6 +593,7 @@ export function normalizeSession(value: unknown): Session {
       pick(raw, ["class_name"]) || pick(toRaw(raw.class), ["name", "class_name"]),
     course_name:
       pick(raw, ["course_name"]) || pick(toRaw(raw.class), ["course_name"]),
+    section: pick(raw, ["section"]) || pick(toRaw(raw.class), ["section"]),
     professor_id: pick(raw, ["professor_id"]),
     classroom_id: idOf(raw.classroom) || pick(raw, ["classroom_id"]),
     classroom_name:

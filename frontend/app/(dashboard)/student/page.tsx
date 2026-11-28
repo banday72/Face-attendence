@@ -6,6 +6,7 @@ import {
   CalendarCheck2,
   CalendarClock,
   GraduationCap,
+  Radio,
   RefreshCw,
   TrendingUp,
 } from "lucide-react";
@@ -33,7 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import { useResource } from "@/lib/hooks";
+import { useActiveSessions, useResource } from "@/lib/hooks";
 import { normalizeSchedule, normalizeStudentDashboard } from "@/lib/normalize";
 import type { ClassItem } from "@/lib/types";
 import { formatDateTime, formatTime, percent } from "@/lib/utils";
@@ -61,6 +62,8 @@ export default function StudentDashboardPage() {
     return { ...normalizeStudentDashboard(payload), today_classes: todayClasses };
   }, []);
   const dashboard = useResource(loader);
+  const activeSessions = useActiveSessions();
+  const liveSession = activeSessions.data?.[0];
 
   return (
     <div className="space-y-6">
@@ -79,6 +82,39 @@ export default function StudentDashboardPage() {
           </>
         }
       />
+
+      {liveSession ? (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2">
+                <Radio className="size-4 text-primary" /> Live session in progress
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {liveSession.course_name || liveSession.class_name || "Class"}
+                {liveSession.section ? ` · ${liveSession.section}` : ""}
+                {liveSession.classroom_name ? ` · ${liveSession.classroom_name}` : ""}
+              </p>
+              {liveSession.started_at || liveSession.start_time ? (
+                <p className="text-xs text-muted-foreground">
+                  Started {formatDateTime(liveSession.started_at || liveSession.start_time || "")}
+                  {activeSessions.data && activeSessions.data.length > 1
+                    ? ` · ${activeSessions.data.length} sessions active`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm">
+                <Link href="/student/scan">Scan QR</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/student/face-attendance">Face check-in</Link>
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+      ) : null}
 
       <QueryState
         loading={dashboard.loading}

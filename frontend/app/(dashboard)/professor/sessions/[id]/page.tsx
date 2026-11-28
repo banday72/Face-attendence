@@ -53,7 +53,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage } from "@/lib/api";
-import { LIVE_REFRESH_MS } from "@/lib/constants";
+import { LIVE_REFRESH_MS, sessionQrStorageKey } from "@/lib/constants";
 import { useResource } from "@/lib/hooks";
 import {
   normalizeMarkAbsentResult,
@@ -114,9 +114,25 @@ export default function SessionMonitorPage() {
   const missing = useResource(missingLoader);
   const { reload: reloadMissing } = missing;
 
+  const readStoredQr = useCallback((id: string): QrPayload | null => {
+    try {
+      const raw = window.sessionStorage.getItem(sessionQrStorageKey(id));
+      if (!raw) return null;
+      const stored = normalizeQrPayload(JSON.parse(raw));
+      if (!stored) return null;
+      if (!stored.expires_at || new Date(stored.expires_at).getTime() > Date.now()) {
+        return stored;
+      }
+      window.sessionStorage.removeItem(sessionQrStorageKey(id));
+    } catch {
+      window.sessionStorage.removeItem(sessionQrStorageKey(id));
+    }
+    return null;
+  }, []);
+
   useEffect(() => {
-    setQr(null);
-  }, [sessionId]);
+    setQr(readStoredQr(sessionId));
+  }, [readStoredQr, sessionId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -143,11 +159,13 @@ export default function SessionMonitorPage() {
       const response = await api.post<unknown>(`/sessions/${sessionId}/${action}`);
       if (action === "close") {
         setQr(null);
+        sessionStorage.removeItem(sessionQrStorageKey(sessionId));
         toast.success("Session closed");
       } else {
         const nextQr = normalizeQrPayload(response);
         if (nextQr) {
           setQr(nextQr);
+          sessionStorage.setItem(sessionQrStorageKey(sessionId), JSON.stringify(nextQr));
           toast.success(action === "start" ? "Session started" : "QR token refreshed");
         } else {
           toast.error("Action completed, but no QR token was returned. Try Refresh QR.");

@@ -331,6 +331,7 @@ export interface Session {
   class_id: string;
   class_name?: string;
   course_name?: string;
+  section?: string;
   professor_id?: string;
   classroom_id?: string;
   classroom_name?: string;

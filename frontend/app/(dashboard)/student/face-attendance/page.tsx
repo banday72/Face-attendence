@@ -33,9 +33,9 @@ import {
   faceDetectionErrorMessage,
   type CapturedFaceFeatures,
 } from "@/lib/face-api";
-import { useResource } from "@/lib/hooks";
+import { useActiveSessions, useResource } from "@/lib/hooks";
 import { getCurrentLocation, type LocationReading } from "@/lib/location";
-import { isRecord, normalizeFaceStatus, normalizePaginated, normalizeSession, pick } from "@/lib/normalize";
+import { isRecord, normalizeFaceStatus, pick } from "@/lib/normalize";
 import type { AttendanceStatus, Session } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
@@ -59,14 +59,7 @@ export default function FaceAttendancePage() {
   const [result, setResult] = useState<FaceResult | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const sessionsLoader = useCallback(
-    () =>
-      api
-        .get<unknown>("/sessions/active")
-        .then((payload) => (Array.isArray(payload) ? payload.map(normalizeSession) : normalizePaginated(payload, normalizeSession).items)),
-    [],
-  );
-  const sessions = useResource(sessionsLoader);
+  const sessions = useActiveSessions();
   const faceStatus = useResource(
     useCallback(() => api.get<unknown>("/face/status").then(normalizeFaceStatus), []),
   );

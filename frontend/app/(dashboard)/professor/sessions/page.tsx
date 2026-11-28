@@ -11,7 +11,7 @@ import {
   Square,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -52,8 +52,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ApiError, api, errorMessage } from "@/lib/api";
+import { sessionQrStorageKey } from "@/lib/constants";
 import { useResource } from "@/lib/hooks";
-import { normalizeClass, normalizeClassroom, normalizePaginated, normalizeSession } from "@/lib/normalize";
+import {
+  normalizeClass,
+  normalizeClassroom,
+  normalizePaginated,
+  normalizeQrPayload,
+  normalizeSession,
+} from "@/lib/normalize";
 import type { Classroom, ClassItem, Session } from "@/lib/types";
 import { formatDateTime, toDateTimeLocal } from "@/lib/utils";
 
@@ -92,6 +99,7 @@ const defaultForm: SessionForm = {
 };
 
 function SessionsContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClass = searchParams.get("class_id") ?? "";
   const [classFilter, setClassFilter] = useState(preselectedClass);
@@ -185,14 +193,26 @@ function SessionsContent() {
   const runAction = async (session: Session, action: "start" | "qr/refresh" | "close") => {
     setBusyId(session.id);
     try {
-      await api.post(`/sessions/${session.id}/${action}`);
-      toast.success(
-        action === "start"
-          ? "Session opened for check-ins"
-          : action === "qr/refresh"
-            ? "QR token rotated"
-            : "Session closed",
-      );
+      const response = await api.post<unknown>(`/sessions/${session.id}/${action}`);
+      if (action === "start") {
+        const qr = normalizeQrPayload(response);
+        if (qr) {
+          sessionStorage.setItem(sessionQrStorageKey(session.id), JSON.stringify(qr));
+        }
+        toast.success("Session opened for check-ins");
+        router.push(`/professor/sessions/${session.id}`);
+        return;
+      }
+      if (action === "qr/refresh") {
+        const qr = normalizeQrPayload(response);
+        if (qr) {
+          sessionStorage.setItem(sessionQrStorageKey(session.id), JSON.stringify(qr));
+        }
+        toast.success("QR token rotated");
+      } else {
+        sessionStorage.removeItem(sessionQrStorageKey(session.id));
+        toast.success("Session closed");
+      }
       resource.reload();
     } catch (error) {
       toast.error(errorMessage(error));

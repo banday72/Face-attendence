@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { api } from "@/lib/api";
+import { normalizePaginated, normalizeSession } from "@/lib/normalize";
+import type { Session } from "@/lib/types";
+
 export interface ResourceState<T> {
   data: T | null;
   loading: boolean;
@@ -53,6 +57,19 @@ export function useResource<T>(
   const reload = useCallback(() => setNonce((value) => value + 1), []);
 
   return { data, loading, error, reload, setData };
+}
+
+export function useActiveSessions() {
+  const loader = useCallback(
+    () =>
+      api.get<unknown>("/sessions/active").then((payload) =>
+        Array.isArray(payload)
+          ? payload.map(normalizeSession)
+          : normalizePaginated(payload, normalizeSession).items,
+      ),
+    [],
+  );
+  return useResource<Session[]>(loader);
 }
 
 export function useDebouncedValue<T>(value: T, delay = 300): T {

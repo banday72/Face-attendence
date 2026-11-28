@@ -8,9 +8,11 @@ import {
   CircleAlert,
   KeyRound,
   MapPin,
+  Radio,
   ScanLine,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -22,10 +24,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, errorMessage } from "@/lib/api";
 import { cameraErrorMessage, startCamera, stopCamera } from "@/lib/camera";
+import { useActiveSessions } from "@/lib/hooks";
 import { getCurrentLocation, type LocationReading } from "@/lib/location";
 import { isRecord, pick } from "@/lib/normalize";
 import { cleanQrPayload, startQrScanner } from "@/lib/qr";
 import type { AttendanceStatus } from "@/lib/types";
+import { formatDateTime } from "@/lib/utils";
 
 interface CheckInResult {
   status: AttendanceStatus;
@@ -49,6 +53,7 @@ export default function StudentScanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CheckInResult | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const activeSessions = useActiveSessions();
 
   const captureLocation = useCallback(async (): Promise<LocationReading> => {
     try {
@@ -175,6 +180,53 @@ export default function StudentScanPage() {
         title="Scan attendance QR"
         description="Point your camera at the QR code shown in class. Location is captured only when you allow it."
       />
+
+      <Card>
+        <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="size-4 text-primary" /> Active sessions
+            </CardTitle>
+            <CardDescription>
+              Sessions currently open for check-in. Scan the QR displayed in class.
+            </CardDescription>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/student/face-attendance">Face check-in</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {activeSessions.loading ? (
+            <p className="text-sm text-muted-foreground">Loading active sessions…</p>
+          ) : activeSessions.error ? (
+            <p className="text-sm text-destructive">{errorMessage(activeSessions.error)}</p>
+          ) : activeSessions.data && activeSessions.data.length > 0 ? (
+            <div className="grid gap-2 md:grid-cols-2">
+              {activeSessions.data.map((session) => (
+                <div
+                  key={session.id}
+                  className="rounded-md border border-border bg-muted/30 p-3 text-sm"
+                >
+                  <p className="font-medium">
+                    {session.course_name || session.class_name || "Class"}
+                    {session.section ? ` · ${session.section}` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {session.classroom_name || "Classroom not set"}
+                    {session.started_at || session.start_time
+                      ? ` · Started ${formatDateTime(session.started_at || session.start_time || "")}`
+                      : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No active sessions right now. Wait for your professor to start one.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
         <Card>
