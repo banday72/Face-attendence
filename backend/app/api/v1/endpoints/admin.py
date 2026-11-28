@@ -1532,21 +1532,25 @@ def assign_professor_to_course(
     if existing:
         raise AppError(409, "conflict", "Professor is already assigned to this course")
     assigned_at = utcnow()
-    db.execute(
-        course_professors.insert().values(
-            course_id=course_id, professor_id=professor_id, created_at=assigned_at
+    try:
+        db.execute(
+            course_professors.insert().values(
+                course_id=course_id, professor_id=professor_id, created_at=assigned_at
+            )
         )
-    )
-    write_audit_log(
-        db,
-        action="course_professor.assign",
-        entity_type="course_professor",
-        entity_id=f"{course_id}:{professor_id}",
-        actor=actor,
-        after={"course_id": course_id, "professor_id": professor_id},
-        request=request,
-    )
-    db.commit()
+        write_audit_log(
+            db,
+            action="course_professor.assign",
+            entity_type="course_professor",
+            entity_id=professor_id,
+            actor=actor,
+            after={"course_id": course_id, "professor_id": professor_id},
+            request=request,
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise AppError(409, "conflict", "Professor is already assigned to this course") from exc
     return _course_professor_out(db, course_id, professor, assigned_at)
 
 
@@ -1578,7 +1582,7 @@ def unassign_professor_from_course(
         db,
         action="course_professor.unassign",
         entity_type="course_professor",
-        entity_id=f"{course_id}:{professor_id}",
+        entity_id=professor_id,
         actor=actor,
         before={"course_id": course_id, "professor_id": professor_id},
         request=request,

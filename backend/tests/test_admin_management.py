@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AttendanceRecord, RefreshToken, Student, User
+from app.models import AttendanceRecord, AuditLog, RefreshToken, Student, User
 from app.utils.uuid import new_uuid, utcnow
 from tests.conftest import (
     create_academic_data,
@@ -92,6 +92,13 @@ def test_admin_assigns_professor_to_course_and_creates_section_enrollment(
     duplicate = client.post(f"/api/v1/admin/courses/{course_id}/professors/{professor_id}", headers=headers)
     assert duplicate.status_code == 409
 
+    assign_log = (
+        db_session.query(AuditLog).filter(AuditLog.action == "course_professor.assign").one()
+    )
+    assert assign_log.entity_id == professor_id
+    assert len(assign_log.entity_id or "") <= 36
+    assert assign_log.after_json["course_id"] == course_id
+
     listed = client.get(f"/api/v1/admin/courses/{course_id}/professors", headers=headers)
     assert listed.status_code == 200
     assert [item["professor_id"] for item in listed.json()] == [professor_id]
@@ -123,6 +130,12 @@ def test_admin_assigns_professor_to_course_and_creates_section_enrollment(
 
     unassigned = client.delete(f"/api/v1/admin/courses/{course_id}/professors/{professor_id}", headers=headers)
     assert unassigned.status_code == 204
+
+    unassign_log = (
+        db_session.query(AuditLog).filter(AuditLog.action == "course_professor.unassign").one()
+    )
+    assert unassign_log.entity_id == professor_id
+    assert len(unassign_log.entity_id or "") <= 36
 
 
 def test_admin_password_reset_revokes_refresh_sessions(client: TestClient, db_session: Session) -> None:
